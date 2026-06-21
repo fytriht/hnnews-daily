@@ -1,16 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
+  Info,
   MailOpen,
   MessageCircle,
   RefreshCw,
+  RotateCcw,
+  Settings,
   Sparkles,
+  X,
 } from "lucide-react";
-import { buildCodexSummarizeUrl } from "./codex";
+import {
+  buildCodexSummarizeUrl,
+  DEFAULT_CODEX_PROMPT_TEMPLATE,
+  type CodexSettings,
+} from "./codex";
 import { fetchDailyIssues } from "./hnDaily";
 import {
+  readStoredCodexSettings,
   readStoredReadState,
   readStoredSelectedDate,
+  writeStoredCodexSettings,
   writeStoredReadState,
   writeStoredSelectedDate,
 } from "./storage";
@@ -41,6 +51,10 @@ export function App() {
   const [readState, setReadState] = useState<ReadState>(() =>
     readStoredReadState(),
   );
+  const [codexSettings, setCodexSettings] = useState<CodexSettings>(() =>
+    readStoredCodexSettings(),
+  );
+  const [isCodexSettingsOpen, setIsCodexSettingsOpen] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +78,15 @@ export function App() {
       writeStoredReadState(next);
       return next;
     });
+  }, []);
+
+  const handleCodexSettingsChange = useCallback((settings: CodexSettings) => {
+    setCodexSettings(settings);
+    writeStoredCodexSettings(settings);
+  }, []);
+
+  const handleToggleCodexSettings = useCallback(() => {
+    setIsCodexSettingsOpen((isOpen) => !isOpen);
   }, []);
 
   const loadIssues = useCallback(async () => {
@@ -159,7 +182,11 @@ export function App() {
             <IssueDetail
               issue={selectedIssue}
               isRead={Boolean(readState[selectedIssue.date])}
+              codexSettings={codexSettings}
+              isCodexSettingsOpen={isCodexSettingsOpen}
               onMarkUnread={() => markIssue(selectedIssue.date, false)}
+              onCodexSettingsChange={handleCodexSettingsChange}
+              onToggleCodexSettings={handleToggleCodexSettings}
             />
           ) : (
             <EmptyState />
@@ -173,10 +200,22 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
+  codexSettings: CodexSettings;
+  isCodexSettingsOpen: boolean;
   onMarkUnread: () => void;
+  onCodexSettingsChange: (settings: CodexSettings) => void;
+  onToggleCodexSettings: () => void;
 }
 
-function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
+function IssueDetail({
+  issue,
+  isRead,
+  codexSettings,
+  isCodexSettingsOpen,
+  onMarkUnread,
+  onCodexSettingsChange,
+  onToggleCodexSettings,
+}: IssueDetailProps) {
   return (
     <>
       <div className="detail-header">
@@ -185,17 +224,39 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
           <h2>Hacker News Daily</h2>
         </div>
 
-        <button
-          className="icon-button quiet-button"
-          type="button"
-          onClick={onMarkUnread}
-          disabled={!isRead}
-          aria-label="Mark selected issue unread"
-          title="Mark unread"
-        >
-          <MailOpen size={16} />
-        </button>
+        <div className="detail-actions">
+          <button
+            className="icon-button quiet-button"
+            type="button"
+            onClick={onMarkUnread}
+            disabled={!isRead}
+            aria-label="Mark selected issue unread"
+            title="Mark unread"
+          >
+            <MailOpen size={16} />
+          </button>
+          <button
+            className={`icon-button quiet-button ${
+              isCodexSettingsOpen ? "active" : ""
+            }`}
+            type="button"
+            onClick={onToggleCodexSettings}
+            aria-expanded={isCodexSettingsOpen}
+            aria-controls="codex-settings-dialog"
+            aria-label="Codex settings"
+            title="Codex settings"
+          >
+            <Settings size={16} />
+          </button>
+        </div>
       </div>
+
+      <CodexSettingsDialog
+        isOpen={isCodexSettingsOpen}
+        settings={codexSettings}
+        onChange={onCodexSettingsChange}
+        onClose={onToggleCodexSettings}
+      />
 
       <ol className="post-list">
         {issue.posts.map((post, index) => (
@@ -233,6 +294,7 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
                 href={buildCodexSummarizeUrl(
                   post.originalUrl,
                   post.hnCommentsUrl,
+                  codexSettings,
                 )}
                 title="Summarize with Codex"
               >
@@ -244,6 +306,155 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
         ))}
       </ol>
     </>
+  );
+}
+
+interface CodexSettingsDialogProps {
+  isOpen: boolean;
+  settings: CodexSettings;
+  onChange: (settings: CodexSettings) => void;
+  onClose: () => void;
+}
+
+function CodexSettingsDialog({
+  isOpen,
+  settings,
+  onChange,
+  onClose,
+}: CodexSettingsDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (isOpen && !dialog.open) {
+      dialog.showModal();
+      return;
+    }
+
+    if (!isOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
+
+  const updatePromptTemplate = (promptTemplate: string) => {
+    onChange({
+      ...settings,
+      promptTemplate,
+    });
+  };
+  const updateProjectPath = (projectPath: string) => {
+    onChange({
+      ...settings,
+      projectPath,
+    });
+  };
+  const resetSettings = () => {
+    onChange({
+      promptTemplate: DEFAULT_CODEX_PROMPT_TEMPLATE,
+      projectPath: "",
+    });
+  };
+
+  return (
+    <dialog
+      className="settings-dialog"
+      id="codex-settings-dialog"
+      ref={dialogRef}
+      aria-labelledby="codex-settings-title"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="settings-dialog-header">
+        <h2 id="codex-settings-title">Settings</h2>
+        <button
+          className="icon-button quiet-button"
+          type="button"
+          onClick={onClose}
+          aria-label="Close Codex settings"
+          title="Close"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="settings-dialog-body">
+        <div className="settings-field">
+          <label className="settings-label" htmlFor="codex-prompt-template">
+            <span>Prompt template</span>
+            <span
+              className="settings-tooltip"
+              tabIndex={0}
+              title="Builds the Codex prompt. Use {originalUrl} and {hnCommentsUrl} to insert the article and comments links."
+              aria-label="Builds the Codex prompt. Use originalUrl and hnCommentsUrl placeholders to insert the article and comments links."
+            >
+              <Info size={13} aria-hidden="true" />
+            </span>
+          </label>
+          <textarea
+            id="codex-prompt-template"
+            value={settings.promptTemplate}
+            rows={4}
+            spellCheck={false}
+            onChange={(event) =>
+              updatePromptTemplate(event.currentTarget.value)
+            }
+            onBlur={(event) => {
+              if (!event.currentTarget.value.trim()) {
+                updatePromptTemplate(DEFAULT_CODEX_PROMPT_TEMPLATE);
+              }
+            }}
+          />
+        </div>
+        <div className="settings-field">
+          <label className="settings-label" htmlFor="codex-project-path">
+            <span>Project path</span>
+            <span
+              className="settings-tooltip"
+              tabIndex={0}
+              title="Optional project path passed to Codex. Leave blank to open the new thread outside a project."
+              aria-label="Optional project path passed to Codex. Leave blank to open the new thread outside a project."
+            >
+              <Info size={13} aria-hidden="true" />
+            </span>
+          </label>
+          <input
+            id="codex-project-path"
+            type="text"
+            value={settings.projectPath}
+            placeholder="/Users/name/project"
+            spellCheck={false}
+            onChange={(event) => updateProjectPath(event.currentTarget.value)}
+            onBlur={(event) => {
+              const projectPath = event.currentTarget.value.trim();
+              if (projectPath !== settings.projectPath) {
+                updateProjectPath(projectPath);
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="settings-dialog-footer">
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={resetSettings}
+          title="Reset Codex settings"
+        >
+          <RotateCcw size={14} />
+          Reset
+        </button>
+      </div>
+    </dialog>
   );
 }
 

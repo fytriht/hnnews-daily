@@ -12,9 +12,11 @@ Live site: [https://hnnews-daily.pages.dev](https://hnnews-daily.pages.dev)
 - `Codex summarize` opens a new Codex thread with this prompt:
 
 ```text
-总结 {original-link} {hn-link}
+总结 {originalUrl} {hnCommentsUrl}
 ```
 
+- The Codex prompt template can be changed in the app settings. It supports `{originalUrl}` and `{hnCommentsUrl}` placeholders.
+- The Codex project path is optional. If it is blank, Codex opens the new thread without a project path.
 - Opening an issue marks it as read on the current device
 - Read issues can be manually marked as unread
 - Read state is stored in browser `localStorage`
