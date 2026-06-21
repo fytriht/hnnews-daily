@@ -1,4 +1,4 @@
-# HN Daily Codex Reader
+# Hacker News Daily Codex Reader
 
 A small daily reading tool for Hacker News Daily. It shows the latest 10 daily issues, lists the top posts for each day, and adds a one-click Codex summary flow for every post.
 
@@ -79,13 +79,13 @@ http://127.0.0.1:5173/
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the Vite dev server |
-| `npm run build` | Type-check frontend and function code, then build the app |
-| `npm run typecheck:functions` | Type-check Cloudflare Pages Functions only |
-| `npm run lint` | Run ESLint |
-| `npm run preview` | Preview the production build locally |
+| Command                       | Description                                               |
+|-------------------------------|-----------------------------------------------------------|
+| `npm run dev`                 | Start the Vite dev server                                 |
+| `npm run build`               | Type-check frontend and function code, then build the app |
+| `npm run typecheck:functions` | Type-check Cloudflare Pages Functions only                |
+| `npm run lint`                | Run ESLint                                                |
+| `npm run preview`             | Preview the production build locally                      |
 
 `npm run build` checks both the frontend TypeScript code and the Cloudflare Function types.
 
