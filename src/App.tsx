@@ -9,6 +9,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { Button } from "./Button";
 import {
   buildCodexSummarizeUrl,
   DEFAULT_CODEX_PROMPT_TEMPLATE,
@@ -237,21 +238,15 @@ function IssueDetail({
         </div>
 
         <div className="detail-actions">
-          <button
-            className="icon-button quiet-button"
-            type="button"
+          <Button
             onClick={onMarkUnread}
             disabled={!isRead}
             aria-label="Mark selected issue unread"
             title="Mark unread"
           >
             <MailOpen size={16} />
-          </button>
-          <button
-            className={`icon-button quiet-button ${
-              isCodexSettingsOpen ? "active" : ""
-            }`}
-            type="button"
+          </Button>
+          <Button
             onClick={onToggleCodexSettings}
             aria-expanded={isCodexSettingsOpen}
             aria-controls="codex-settings-dialog"
@@ -259,7 +254,7 @@ function IssueDetail({
             title="Codex settings"
           >
             <Settings size={16} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -301,8 +296,7 @@ function IssueDetail({
               </a>
             </div>
             <div className="post-actions">
-              <a
-                className="summarize-link"
+              <Button
                 href={buildCodexSummarizeUrl(
                   post.originalUrl,
                   post.hnCommentsUrl,
@@ -312,7 +306,7 @@ function IssueDetail({
               >
                 <Sparkles size={16} />
                 Summarize
-              </a>
+              </Button>
             </div>
           </li>
         ))}
@@ -387,15 +381,13 @@ function CodexSettingsDialog({
     >
       <div className="settings-dialog-header">
         <h2 id="codex-settings-title">Settings</h2>
-        <button
-          className="icon-button quiet-button"
-          type="button"
+        <Button
           onClick={onClose}
           aria-label="Close Codex settings"
           title="Close"
         >
           <X size={16} />
-        </button>
+        </Button>
       </div>
 
       <div className="settings-dialog-body">
@@ -456,15 +448,14 @@ function CodexSettingsDialog({
       </div>
 
       <div className="settings-dialog-footer">
-        <button
-          className="secondary-button"
-          type="button"
+        <Button
+          variant="outline"
           onClick={resetSettings}
           title="Reset Codex settings"
         >
           <RotateCcw size={14} />
           Reset
-        </button>
+        </Button>
       </div>
     </dialog>
   );
@@ -493,14 +484,10 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
     <div className="state-panel">
       <h2>Feed unavailable</h2>
       <p>{message ?? "The HN Daily RSS feed could not be loaded."}</p>
-      <button
-        className="primary-button"
-        type="button"
-        onClick={() => void onRetry()}
-      >
+      <Button onClick={() => void onRetry()}>
         <RefreshCw size={16} />
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

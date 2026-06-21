@@ -56,17 +56,19 @@ a {
   padding: 24px;
 }
 
-.icon-button {
+.button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
   flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: var(--muted);
-  background: transparent;
+  font-size: 13px;
+  font-weight: 720;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -74,28 +76,43 @@ a {
     color 160ms ease;
 }
 
-.icon-button:hover:not(:disabled) {
+.button--default {
+  color: var(--muted);
+  background: transparent;
+}
+
+.button--default:hover:not(:disabled) {
   color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.14);
   background: rgba(29, 115, 212, 0.06);
 }
 
-.icon-button.active {
+.button--outline {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.button--outline:hover:not(:disabled) {
   color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.18);
+  border-color: rgba(29, 115, 212, 0.32);
+  background: #f4f8ff;
+}
+
+.button[data-icon-only="true"] {
+  width: 34px;
+  padding: 0;
+}
+
+.button[aria-expanded="true"] {
+  color: var(--focus);
   background: rgba(29, 115, 212, 0.08);
 }
 
-.icon-button:disabled {
+.button:disabled {
   cursor: default;
   color: var(--soft);
   background: transparent;
   opacity: 0.58;
-}
-
-.quiet-button {
-  width: 34px;
-  height: 34px;
 }
 
 .workspace {
@@ -284,51 +301,6 @@ a {
   gap: 8px;
   margin-left: auto;
   flex: 0 0 auto;
-}
-
-.primary-button,
-.secondary-button,
-.summarize-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 720;
-  white-space: nowrap;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
-}
-
-.primary-button {
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 14px;
-  color: #fff;
-  background: var(--accent);
-  cursor: pointer;
-}
-
-.primary-button:hover {
-  background: var(--accent-strong);
-}
-
-.secondary-button {
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  background: var(--surface);
-  cursor: pointer;
-}
-
-.secondary-button:hover {
-  color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.32);
-  background: #f4f8ff;
 }
 
 .settings-dialog {
@@ -522,22 +494,6 @@ a {
   gap: 6px;
 }
 
-.summarize-link {
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 9px;
-  border: 1px solid transparent;
-  color: var(--muted);
-  background: transparent;
-  font-weight: 680;
-}
-
-.summarize-link:hover {
-  color: var(--accent-strong);
-  border-color: rgba(255, 102, 0, 0.16);
-  background: rgba(255, 102, 0, 0.07);
-}
-
 .state-panel {
   display: grid;
   place-items: start;
@@ -662,10 +618,6 @@ textarea:focus-visible,
 
   .settings-dialog-footer {
     padding: 0 18px 18px;
-  }
-
-  .settings-dialog-footer .secondary-button {
-    width: 100%;
   }
 
   .post-list {
