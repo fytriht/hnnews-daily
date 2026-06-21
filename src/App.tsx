@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
+  Github,
   Info,
   MailOpen,
   MessageCircle,
@@ -193,6 +194,19 @@ export function App() {
           )}
         </section>
       </section>
+      <footer className="project-footer">
+        <a
+          className="project-link"
+          href="https://github.com/fytriht/hnnews-daily"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open GitHub project"
+          title="GitHub project"
+        >
+          <Github size={13} aria-hidden="true" />
+          GitHub
+        </a>
+      </footer>
     </main>
   );
 }
