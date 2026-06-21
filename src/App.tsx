@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpenCheck,
-  CheckCircle2,
   ExternalLink,
   MessageCircle,
   RefreshCw,
@@ -25,6 +24,12 @@ const weekdayFormatter = new Intl.DateTimeFormat("en", {
   weekday: "short",
 });
 
+const headingDateFormatter = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
 type LoadState = "idle" | "loading" | "loaded" | "error";
 
 export function App() {
@@ -37,11 +42,6 @@ export function App() {
   const selectedIssue = useMemo(
     () => issues.find((issue) => issue.date === selectedDate) ?? issues[0] ?? null,
     [issues, selectedDate],
-  );
-
-  const unreadCount = useMemo(
-    () => issues.filter((issue) => !readState[issue.date]).length,
-    [issues, readState],
   );
 
   const markIssue = useCallback((date: string, isRead: boolean) => {
@@ -100,17 +100,10 @@ export function App() {
           <span className="brand-mark" aria-hidden="true">
             <BookOpenCheck size={20} />
           </span>
-          <div>
-            <h1>HN Daily Codex Reader</h1>
-            <p>Daily Hacker News queue with one-click Codex summaries</p>
-          </div>
+          <h1>HN Daily</h1>
         </div>
 
         <div className="topbar-actions">
-          <div className="status-chip" aria-label={`${unreadCount} unread issues`}>
-            <span>{unreadCount}</span>
-            unread
-          </div>
           <button
             className="icon-button"
             type="button"
@@ -126,11 +119,6 @@ export function App() {
 
       <section className="workspace">
         <aside className="issue-rail" aria-label="Recent daily issues">
-          <div className="rail-heading">
-            <span>Latest 7 days</span>
-            <strong>{issues.length || "--"}</strong>
-          </div>
-
           <div className="issue-list">
             {loadState === "loading" && issues.length === 0 ? (
               <IssueSkeleton />
@@ -148,20 +136,9 @@ export function App() {
                     {formatDate(issue.date)}
                     <small>{formatWeekday(issue.date)}</small>
                   </span>
-                  <span className="issue-meta">
-                    <strong>{issue.posts.length}</strong>
-                    stories
-                  </span>
-                  <span className="read-indicator">
-                    {readState[issue.date] ? (
-                      <>
-                        <CheckCircle2 size={15} />
-                        Read
-                      </>
-                    ) : (
-                      "Unread"
-                    )}
-                  </span>
+                  {!readState[issue.date] ? (
+                    <span className="read-dot" aria-label="Unread issue" />
+                  ) : null}
                 </button>
               ))
             )}
@@ -197,22 +174,19 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
     <>
       <div className="detail-header">
         <div>
-          <div className="detail-kicker">{formatWeekday(issue.date)} edition</div>
-          <h2>{issue.title}</h2>
-          <p>
-            {issue.posts.length} top stories from Hacker News Daily. Selecting a
-            day marks it as read on this device.
-          </p>
+          <time dateTime={issue.date}>{formatHeadingDate(issue.date)}</time>
+          <h2>Daily Hacker News</h2>
         </div>
 
         <button
-          className="secondary-button"
+          className="icon-button quiet-button"
           type="button"
           onClick={onMarkUnread}
           disabled={!isRead}
+          aria-label="Mark selected issue unread"
+          title="Mark unread"
         >
           <RotateCcw size={16} />
-          Mark unread
         </button>
       </div>
 
@@ -230,28 +204,28 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
                 href={post.originalUrl}
                 target="_blank"
                 rel="noreferrer"
+                aria-label={`Open original article: ${post.title}`}
                 title="Open original article"
               >
                 <ExternalLink size={16} />
-                Original
               </a>
               <a
                 className="action-link"
                 href={post.hnCommentsUrl}
                 target="_blank"
                 rel="noreferrer"
+                aria-label={`Open Hacker News comments: ${post.title}`}
                 title="Open Hacker News comments"
               >
                 <MessageCircle size={16} />
-                HN
               </a>
               <a
-                className="codex-button"
+                className="summarize-link"
                 href={buildCodexSummarizeUrl(post.originalUrl, post.hnCommentsUrl)}
-                title="Open a Codex thread with the summarize prompt"
+                title="Summarize with Codex"
               >
                 <Sparkles size={16} />
-                Codex summarize
+                Summarize
               </a>
             </div>
           </li>
@@ -266,7 +240,6 @@ function IssueSkeleton() {
     <>
       {Array.from({ length: 7 }).map((_, index) => (
         <div className="issue-row skeleton" key={index}>
-          <span />
           <span />
           <span />
         </div>
@@ -308,6 +281,10 @@ function formatDate(date: string) {
 
 function formatWeekday(date: string) {
   return weekdayFormatter.format(parseDate(date));
+}
+
+function formatHeadingDate(date: string) {
+  return headingDateFormatter.format(parseDate(date));
 }
 
 function parseDate(date: string) {

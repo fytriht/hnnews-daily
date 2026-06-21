@@ -1,6 +1,6 @@
 :root {
-  color: #16181d;
-  background: #f5f6f8;
+  color: #111318;
+  background: #f6f7f9;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -8,17 +8,18 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   --accent: #ff6600;
-  --accent-strong: #dc5400;
-  --ink: #16181d;
-  --muted: #69707d;
-  --soft: #8b93a1;
-  --line: #dde1e8;
+  --accent-strong: #d95700;
+  --accent-soft: #fff3eb;
+  --accent-line: #ffd8c2;
+  --ink: #111318;
+  --muted: #68707d;
+  --soft: #929aa6;
+  --line: #e3e7ee;
+  --line-strong: #d5dbe4;
   --surface: #ffffff;
-  --surface-subtle: #fafbfc;
-  --read: #16725f;
-  --read-bg: #e8f5f1;
-  --focus: #1e73be;
-  --shadow: 0 20px 55px rgba(26, 31, 41, 0.08);
+  --surface-subtle: #f8f9fb;
+  --focus: #1d73d4;
+  --shadow: 0 18px 45px rgba(17, 19, 24, 0.055);
 }
 
 * {
@@ -29,6 +30,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  color: var(--ink);
+  background: var(--background, #f6f7f9);
 }
 
 button,
@@ -54,15 +57,15 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  max-width: 1440px;
+  gap: 16px;
+  max-width: 1220px;
   margin: 0 auto 18px;
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -70,13 +73,12 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   flex: 0 0 auto;
   border-radius: 8px;
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 10px 25px rgba(255, 102, 0, 0.24);
 }
 
 .brand h1 {
@@ -87,36 +89,10 @@ a {
   line-height: 1.12;
 }
 
-.brand p {
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--surface);
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.status-chip span {
-  color: var(--accent-strong);
-  font-size: 16px;
+  gap: 8px;
 }
 
 .icon-button {
@@ -125,35 +101,42 @@ a {
   justify-content: center;
   width: 38px;
   height: 38px;
+  flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--muted);
   background: var(--surface);
   cursor: pointer;
   transition:
-    transform 160ms ease,
+    background 160ms ease,
     border-color 160ms ease,
     color 160ms ease;
 }
 
 .icon-button:hover:not(:disabled) {
   color: var(--accent-strong);
-  border-color: rgba(255, 102, 0, 0.42);
-  transform: translateY(-1px);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
 .icon-button:disabled {
-  cursor: wait;
+  cursor: default;
   color: var(--soft);
+  background: var(--surface-subtle);
+}
+
+.quiet-button {
+  width: 36px;
+  height: 36px;
 }
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
   gap: 18px;
-  max-width: 1440px;
+  max-width: 1220px;
+  min-height: calc(100vh - 100px);
   margin: 0 auto;
-  min-height: calc(100vh - 102px);
 }
 
 .issue-rail,
@@ -165,232 +148,183 @@ a {
 }
 
 .issue-rail {
-  padding: 14px;
-  align-self: start;
   position: sticky;
   top: 24px;
-}
-
-.rail-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 2px 12px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 760;
-  text-transform: uppercase;
-}
-
-.rail-heading strong {
-  color: var(--ink);
-  font-size: 16px;
+  align-self: start;
+  padding: 8px;
 }
 
 .issue-list {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .issue-row {
-  display: grid;
-  grid-template-columns: minmax(88px, 1fr) auto;
-  grid-template-areas:
-    "date meta"
-    "state state";
-  gap: 8px 12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
-  min-height: 86px;
-  padding: 13px;
-  border: 1px solid #e6e9ef;
+  min-height: 62px;
+  padding: 11px 12px;
+  border: 1px solid transparent;
   border-radius: 8px;
   color: var(--ink);
-  background: var(--surface-subtle);
+  background: transparent;
   cursor: pointer;
   text-align: left;
   transition:
     background 160ms ease,
     border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+    color 160ms ease;
 }
 
 .issue-row:hover {
-  border-color: rgba(255, 102, 0, 0.42);
-  background: #fff;
-  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  background: var(--surface-subtle);
 }
 
 .issue-row.selected {
-  border-color: rgba(255, 102, 0, 0.68);
-  background: #fff8f2;
-  box-shadow: 0 12px 28px rgba(255, 102, 0, 0.12);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
-.issue-row.read:not(.selected) {
-  background: #fbfcfc;
+.issue-row.selected::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  content: "";
 }
 
 .issue-date {
-  grid-area: date;
   display: grid;
-  gap: 4px;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ink);
   font-size: 18px;
-  font-weight: 780;
+  font-weight: 760;
   line-height: 1;
 }
 
 .issue-date small {
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.issue-meta {
-  grid-area: meta;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
 
-.issue-meta strong {
-  color: var(--ink);
-  font-size: 18px;
-}
-
-.read-indicator {
-  grid-area: state;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  min-height: 25px;
-  padding: 4px 8px;
+.read-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
   border-radius: 999px;
-  color: var(--accent-strong);
-  background: #fff0e5;
-  font-size: 12px;
-  font-weight: 760;
+  background: var(--accent);
 }
 
-.issue-row.read .read-indicator {
-  color: var(--read);
-  background: var(--read-bg);
+.issue-row.read .read-dot {
+  display: none;
 }
 
 .issue-row.skeleton {
   cursor: default;
-  background: linear-gradient(90deg, #f4f6f8, #ffffff, #f4f6f8);
+  background: linear-gradient(90deg, #f3f5f8, #ffffff, #f3f5f8);
   background-size: 260% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
 
 .issue-row.skeleton span {
-  height: 14px;
+  height: 12px;
   border-radius: 999px;
-  background: #e6e9ef;
+  background: #e5e9ef;
+}
+
+.issue-row.skeleton span:first-child {
+  width: 88px;
+}
+
+.issue-row.skeleton span:last-child {
+  width: 8px;
 }
 
 .detail-pane {
   min-width: 0;
-  padding: 24px;
+  overflow: hidden;
 }
 
 .detail-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 20px;
-  padding-bottom: 20px;
+  padding: 24px 28px 18px;
   border-bottom: 1px solid var(--line);
 }
 
-.detail-kicker {
-  margin-bottom: 7px;
-  color: var(--accent-strong);
+.detail-header time {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
   font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
+  font-weight: 680;
+  line-height: 1.2;
 }
 
 .detail-header h2 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(26px, 3vw, 38px);
+  font-size: 30px;
   font-weight: 790;
   line-height: 1.08;
 }
 
-.detail-header p {
-  max-width: 720px;
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.55;
-}
-
-.secondary-button,
 .primary-button,
-.codex-button,
-.action-link {
+.action-link,
+.summarize-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 36px;
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 720;
   white-space: nowrap;
-}
-
-.secondary-button,
-.primary-button {
-  cursor: pointer;
-}
-
-.secondary-button {
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  background: var(--surface);
-}
-
-.secondary-button:hover:not(:disabled) {
-  border-color: rgba(255, 102, 0, 0.45);
-  color: var(--accent-strong);
-}
-
-.secondary-button:disabled {
-  cursor: default;
-  color: var(--soft);
-  background: #f2f4f7;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
 }
 
 .primary-button {
+  gap: 7px;
+  min-height: 36px;
   padding: 0 14px;
   color: #fff;
   background: var(--accent);
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  background: var(--accent-strong);
 }
 
 .post-list {
   display: grid;
   gap: 0;
   margin: 0;
-  padding: 10px 0 0;
+  padding: 0 28px;
   list-style: none;
 }
 
 .post-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   min-height: 78px;
-  padding: 13px 0;
+  padding: 14px 0;
   border-bottom: 1px solid #edf0f4;
 }
 
@@ -402,12 +336,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--soft);
-  background: #f2f4f7;
-  font-size: 13px;
+  background: var(--surface-subtle);
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -428,6 +363,7 @@ a {
   overflow: hidden;
   color: var(--muted);
   font-size: 13px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -436,30 +372,35 @@ a {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-link {
-  padding: 0 10px;
+  width: 34px;
+  height: 34px;
   border: 1px solid var(--line);
   color: var(--muted);
-  background: #fff;
+  background: var(--surface);
 }
 
 .action-link:hover {
   color: var(--focus);
-  border-color: rgba(30, 115, 190, 0.36);
+  border-color: rgba(29, 115, 212, 0.32);
+  background: #f4f8ff;
 }
 
-.codex-button {
-  padding: 0 12px;
-  color: #fff;
-  background: var(--accent);
-  box-shadow: 0 8px 20px rgba(255, 102, 0, 0.18);
+.summarize-link {
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-line);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
-.codex-button:hover {
-  background: var(--accent-strong);
+.summarize-link:hover {
+  border-color: rgba(255, 102, 0, 0.42);
+  background: #ffe9db;
 }
 
 .state-panel {
@@ -469,6 +410,7 @@ a {
   min-height: 420px;
   max-width: 520px;
   margin: 0 auto;
+  padding: 28px;
 }
 
 .state-panel h2 {
@@ -485,7 +427,7 @@ a {
 
 button:focus-visible,
 a:focus-visible {
-  outline: 3px solid rgba(30, 115, 190, 0.28);
+  outline: 3px solid rgba(29, 115, 212, 0.28);
   outline-offset: 2px;
 }
 
@@ -493,6 +435,7 @@ a:focus-visible {
   from {
     background-position: 100% 0;
   }
+
   to {
     background-position: -100% 0;
   }
@@ -512,7 +455,7 @@ a:focus-visible {
   }
 
   .issue-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .post-row {
@@ -534,35 +477,43 @@ a:focus-visible {
   .topbar,
   .detail-header {
     align-items: stretch;
-    flex-direction: column;
-  }
-
-  .topbar-actions {
-    justify-content: space-between;
-  }
-
-  .brand {
-    align-items: flex-start;
   }
 
   .brand h1 {
     font-size: 20px;
   }
 
-  .brand p {
-    font-size: 13px;
+  .workspace {
+    gap: 12px;
+  }
+
+  .issue-rail {
+    overflow: hidden;
   }
 
   .issue-list {
-    grid-template-columns: 1fr;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
   }
 
-  .detail-pane {
-    padding: 18px;
+  .issue-row {
+    min-width: 112px;
+    scroll-snap-align: start;
+  }
+
+  .detail-header {
+    padding: 20px 18px 16px;
   }
 
   .detail-header h2 {
     font-size: 26px;
+  }
+
+  .post-list {
+    padding: 0 18px;
   }
 
   .post-row {
@@ -573,15 +524,18 @@ a:focus-visible {
 
   .post-rank {
     width: fit-content;
-    padding: 0 10px;
+    min-width: 32px;
+    padding: 0 9px;
   }
 
   .post-actions {
     grid-column: 1;
+    justify-content: flex-start;
   }
+}
 
-  .action-link,
-  .codex-button {
-    flex: 1 1 auto;
+@media (max-width: 440px) {
+  .topbar {
+    align-items: flex-start;
   }
 }
