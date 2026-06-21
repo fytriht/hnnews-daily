@@ -57,13 +57,13 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 8px;
   color: var(--muted);
-  background: var(--surface);
+  background: transparent;
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -72,26 +72,27 @@ a {
 }
 
 .icon-button:hover:not(:disabled) {
-  color: var(--accent-strong);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  color: var(--focus);
+  border-color: rgba(29, 115, 212, 0.14);
+  background: rgba(29, 115, 212, 0.06);
 }
 
 .icon-button.active {
-  color: var(--accent-strong);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  color: var(--focus);
+  border-color: rgba(29, 115, 212, 0.18);
+  background: rgba(29, 115, 212, 0.08);
 }
 
 .icon-button:disabled {
   cursor: default;
   color: var(--soft);
-  background: var(--surface-subtle);
+  background: transparent;
+  opacity: 0.58;
 }
 
 .quiet-button {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
 }
 
 .workspace {
@@ -476,31 +477,32 @@ a {
 }
 
 .action-link {
-  width: 34px;
-  height: 34px;
-  border: 1px solid var(--line);
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
   color: var(--muted);
-  background: var(--surface);
+  background: transparent;
 }
 
 .action-link:hover {
   color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.32);
-  background: #f4f8ff;
+  border-color: rgba(29, 115, 212, 0.14);
+  background: rgba(29, 115, 212, 0.06);
 }
 
 .summarize-link {
   gap: 6px;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--accent-line);
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid transparent;
   color: var(--accent-strong);
-  background: var(--accent-soft);
+  background: transparent;
+  font-weight: 680;
 }
 
 .summarize-link:hover {
-  border-color: rgba(255, 102, 0, 0.42);
-  background: #ffe9db;
+  border-color: rgba(255, 102, 0, 0.16);
+  background: rgba(255, 102, 0, 0.07);
 }
 
 .state-panel {
