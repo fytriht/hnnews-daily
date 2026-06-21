@@ -20,13 +20,13 @@ import {
   readStoredCodexSettings,
   readStoredReadState,
   readStoredSelectedDate,
-  readStoredVisitedLinks,
+  readStoredSummarizedPosts,
   writeStoredCodexSettings,
   writeStoredReadState,
   writeStoredSelectedDate,
-  writeStoredVisitedLinks,
+  writeStoredSummarizedPosts,
 } from "./storage";
-import type { DailyIssue, ReadState, VisitedLinkState } from "./types";
+import type { DailyIssue, ReadState, SummarizedPostState } from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -53,10 +53,10 @@ export function App() {
   const [readState, setReadState] = useState<ReadState>(() =>
     readStoredReadState(),
   );
-  const [visitedLinks, setVisitedLinks] = useState<VisitedLinkState>(() =>
-    readStoredVisitedLinks(),
+  const [summarizedPosts, setSummarizedPosts] = useState<SummarizedPostState>(
+    () => readStoredSummarizedPosts(),
   );
-  const visitedLinksRef = useRef(visitedLinks);
+  const summarizedPostsRef = useRef(summarizedPosts);
   const [codexSettings, setCodexSettings] = useState<CodexSettings>(() =>
     readStoredCodexSettings(),
   );
@@ -91,24 +91,19 @@ export function App() {
     writeStoredCodexSettings(settings);
   }, []);
 
-  const markLinksVisited = useCallback((links: string[]) => {
-    const next = { ...visitedLinksRef.current };
-    let didChange = false;
-
-    for (const link of links) {
-      if (!next[link]) {
-        next[link] = true;
-        didChange = true;
-      }
-    }
-
-    if (!didChange) {
+  const markPostSummarized = useCallback((postId: string) => {
+    if (summarizedPostsRef.current[postId]) {
       return;
     }
 
-    visitedLinksRef.current = next;
-    writeStoredVisitedLinks(next);
-    setVisitedLinks(next);
+    const next = {
+      ...summarizedPostsRef.current,
+      [postId]: true,
+    };
+
+    summarizedPostsRef.current = next;
+    writeStoredSummarizedPosts(next);
+    setSummarizedPosts(next);
   }, []);
 
   const handleToggleCodexSettings = useCallback(() => {
@@ -208,11 +203,11 @@ export function App() {
             <IssueDetail
               issue={selectedIssue}
               isRead={Boolean(readState[selectedIssue.date])}
-              visitedLinks={visitedLinks}
+              summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
               isCodexSettingsOpen={isCodexSettingsOpen}
               onMarkUnread={() => markIssue(selectedIssue.date, false)}
-              onMarkLinksVisited={markLinksVisited}
+              onMarkPostSummarized={markPostSummarized}
               onCodexSettingsChange={handleCodexSettingsChange}
               onToggleCodexSettings={handleToggleCodexSettings}
             />
@@ -241,11 +236,11 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
-  visitedLinks: VisitedLinkState;
+  summarizedPosts: SummarizedPostState;
   codexSettings: CodexSettings;
   isCodexSettingsOpen: boolean;
   onMarkUnread: () => void;
-  onMarkLinksVisited: (links: string[]) => void;
+  onMarkPostSummarized: (postId: string) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
   onToggleCodexSettings: () => void;
 }
@@ -253,11 +248,11 @@ interface IssueDetailProps {
 function IssueDetail({
   issue,
   isRead,
-  visitedLinks,
+  summarizedPosts,
   codexSettings,
   isCodexSettingsOpen,
   onMarkUnread,
-  onMarkLinksVisited,
+  onMarkPostSummarized,
   onCodexSettingsChange,
   onToggleCodexSettings,
 }: IssueDetailProps) {
@@ -299,40 +294,35 @@ function IssueDetail({
 
       <ol className="post-list">
         {issue.posts.map((post, index) => (
-          <li className="post-row" key={post.id}>
+          <li
+            className={
+              summarizedPosts[post.id] ? "post-row summarized" : "post-row"
+            }
+            key={post.id}
+          >
             <span className="post-rank">
               {String(index + 1).padStart(2, "0")}
             </span>
             <div className="post-main">
               <h3>
                 <a
-                  className={
-                    visitedLinks[post.hnCommentsUrl]
-                      ? "post-title-link visited"
-                      : "post-title-link"
-                  }
+                  className="post-title-link"
                   href={post.hnCommentsUrl}
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Open Hacker News comments: ${post.title}`}
                   title="Open Hacker News comments"
-                  onClick={() => onMarkLinksVisited([post.hnCommentsUrl])}
                 >
                   {post.title}
                 </a>
               </h3>
               <a
-                className={
-                  visitedLinks[post.originalUrl]
-                    ? "post-domain-link visited"
-                    : "post-domain-link"
-                }
+                className="post-domain-link"
                 href={post.originalUrl}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`Open original article: ${post.title}`}
                 title="Open original article"
-                onClick={() => onMarkLinksVisited([post.originalUrl])}
               >
                 {getDomain(post.originalUrl)}
               </a>
@@ -345,9 +335,7 @@ function IssueDetail({
                   codexSettings,
                 )}
                 title="Summarize with Codex"
-                onClick={() =>
-                  onMarkLinksVisited([post.originalUrl, post.hnCommentsUrl])
-                }
+                onClick={() => onMarkPostSummarized(post.id)}
               >
                 <Sparkles size={16} />
                 Summarize

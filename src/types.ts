@@ -15,4 +15,4 @@ export interface DailyIssue {
 
 export type ReadState = Record<string, boolean>;
 
-export type VisitedLinkState = Record<string, boolean>;
+export type SummarizedPostState = Record<string, boolean>;

@@ -2,12 +2,12 @@ import {
   DEFAULT_CODEX_PROMPT_TEMPLATE,
   type CodexSettings,
 } from "./codex";
-import type { ReadState, VisitedLinkState } from "./types";
+import type { ReadState, SummarizedPostState } from "./types";
 
 const READ_STATE_KEY = "hn-daily-reader:read-days";
 const SELECTED_DATE_KEY = "hn-daily-reader:selected-date";
 const CODEX_SETTINGS_KEY = "hn-daily-reader:codex-settings";
-const VISITED_LINKS_KEY = "hn-daily-reader:visited-links";
+const SUMMARIZED_POSTS_KEY = "hn-daily-reader:summarized-posts";
 const ISSUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function readStoredReadState(): ReadState {
@@ -34,9 +34,9 @@ export function writeStoredReadState(readState: ReadState) {
   window.localStorage.setItem(READ_STATE_KEY, JSON.stringify(readState));
 }
 
-export function readStoredVisitedLinks(): VisitedLinkState {
+export function readStoredSummarizedPosts(): SummarizedPostState {
   try {
-    const raw = window.localStorage.getItem(VISITED_LINKS_KEY);
+    const raw = window.localStorage.getItem(SUMMARIZED_POSTS_KEY);
     if (!raw) {
       return {};
     }
@@ -48,16 +48,18 @@ export function readStoredVisitedLinks(): VisitedLinkState {
 
     return Object.fromEntries(
       Object.entries(parsed).filter(([, value]) => value === true),
-    ) as VisitedLinkState;
+    ) as SummarizedPostState;
   } catch {
     return {};
   }
 }
 
-export function writeStoredVisitedLinks(visitedLinks: VisitedLinkState) {
+export function writeStoredSummarizedPosts(
+  summarizedPosts: SummarizedPostState,
+) {
   window.localStorage.setItem(
-    VISITED_LINKS_KEY,
-    JSON.stringify(visitedLinks),
+    SUMMARIZED_POSTS_KEY,
+    JSON.stringify(summarizedPosts),
   );
 }
 
