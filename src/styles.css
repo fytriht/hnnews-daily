@@ -82,8 +82,8 @@ a {
 }
 
 .button--default:hover:not(:disabled) {
-  color: var(--focus);
-  background: rgba(29, 115, 212, 0.06);
+  color: var(--accent-strong);
+  background: rgba(255, 102, 0, 0.07);
 }
 
 .button--outline {
@@ -93,9 +93,9 @@ a {
 }
 
 .button--outline:hover:not(:disabled) {
-  color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.32);
-  background: #f4f8ff;
+  color: var(--accent-strong);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
 .button[data-icon-only="true"] {
@@ -104,8 +104,8 @@ a {
 }
 
 .button[aria-expanded="true"] {
-  color: var(--focus);
-  background: rgba(29, 115, 212, 0.08);
+  color: var(--accent-strong);
+  background: rgba(255, 102, 0, 0.08);
 }
 
 .button:disabled {
