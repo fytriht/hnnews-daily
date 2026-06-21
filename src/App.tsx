@@ -8,7 +8,12 @@ import {
 } from "lucide-react";
 import { buildCodexSummarizeUrl } from "./codex";
 import { fetchDailyIssues } from "./hnDaily";
-import { readStoredReadState, writeStoredReadState } from "./storage";
+import {
+  readStoredReadState,
+  readStoredSelectedDate,
+  writeStoredReadState,
+  writeStoredSelectedDate,
+} from "./storage";
 import type { DailyIssue, ReadState } from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
@@ -30,7 +35,9 @@ type LoadState = "idle" | "loading" | "loaded" | "error";
 
 export function App() {
   const [issues, setIssues] = useState<DailyIssue[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    readStoredSelectedDate(),
+  );
   const [readState, setReadState] = useState<ReadState>(() =>
     readStoredReadState(),
   );
@@ -42,6 +49,7 @@ export function App() {
       issues.find((issue) => issue.date === selectedDate) ?? issues[0] ?? null,
     [issues, selectedDate],
   );
+  const selectedIssueDate = selectedIssue?.date ?? null;
 
   const markIssue = useCallback((date: string, isRead: boolean) => {
     setReadState((current) => {
@@ -66,8 +74,14 @@ export function App() {
       const nextIssues = await fetchDailyIssues();
       setIssues(nextIssues);
       setSelectedDate((current) => {
-        if (current && nextIssues.some((issue) => issue.date === current)) {
-          return current;
+        const storedDate = readStoredSelectedDate();
+        const candidateDate = current ?? storedDate;
+
+        if (
+          candidateDate &&
+          nextIssues.some((issue) => issue.date === candidateDate)
+        ) {
+          return candidateDate;
         }
 
         return nextIssues[0]?.date ?? null;
@@ -86,6 +100,22 @@ export function App() {
   useEffect(() => {
     void loadIssues();
   }, [loadIssues]);
+
+  useEffect(() => {
+    if (loadState !== "loaded") {
+      return;
+    }
+
+    writeStoredSelectedDate(selectedIssueDate);
+  }, [loadState, selectedIssueDate]);
+
+  useEffect(() => {
+    if (!selectedIssueDate) {
+      return;
+    }
+
+    markIssue(selectedIssueDate, true);
+  }, [markIssue, selectedIssueDate]);
 
   const handleSelectIssue = (issue: DailyIssue) => {
     setSelectedDate(issue.date);
