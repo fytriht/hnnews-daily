@@ -73,17 +73,3 @@ The app is deployed on Cloudflare Pages.
 - Production branch: `main`
 
 Pushing to `main` triggers an automatic Cloudflare Pages deployment.
-
-## Current Hardcoded Config
-
-The Codex deeplink workspace path is currently hardcoded as:
-
-```text
-/Users/zhi/Developer/hnnews-daily
-```
-
-Related code:
-
-```text
-src/codex.ts
-```
