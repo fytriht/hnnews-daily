@@ -20,11 +20,13 @@ import {
   readStoredCodexSettings,
   readStoredReadState,
   readStoredSelectedDate,
+  readStoredVisitedLinks,
   writeStoredCodexSettings,
   writeStoredReadState,
   writeStoredSelectedDate,
+  writeStoredVisitedLinks,
 } from "./storage";
-import type { DailyIssue, ReadState } from "./types";
+import type { DailyIssue, ReadState, VisitedLinkState } from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -51,6 +53,10 @@ export function App() {
   const [readState, setReadState] = useState<ReadState>(() =>
     readStoredReadState(),
   );
+  const [visitedLinks, setVisitedLinks] = useState<VisitedLinkState>(() =>
+    readStoredVisitedLinks(),
+  );
+  const visitedLinksRef = useRef(visitedLinks);
   const [codexSettings, setCodexSettings] = useState<CodexSettings>(() =>
     readStoredCodexSettings(),
   );
@@ -83,6 +89,26 @@ export function App() {
   const handleCodexSettingsChange = useCallback((settings: CodexSettings) => {
     setCodexSettings(settings);
     writeStoredCodexSettings(settings);
+  }, []);
+
+  const markLinksVisited = useCallback((links: string[]) => {
+    const next = { ...visitedLinksRef.current };
+    let didChange = false;
+
+    for (const link of links) {
+      if (!next[link]) {
+        next[link] = true;
+        didChange = true;
+      }
+    }
+
+    if (!didChange) {
+      return;
+    }
+
+    visitedLinksRef.current = next;
+    writeStoredVisitedLinks(next);
+    setVisitedLinks(next);
   }, []);
 
   const handleToggleCodexSettings = useCallback(() => {
@@ -182,9 +208,11 @@ export function App() {
             <IssueDetail
               issue={selectedIssue}
               isRead={Boolean(readState[selectedIssue.date])}
+              visitedLinks={visitedLinks}
               codexSettings={codexSettings}
               isCodexSettingsOpen={isCodexSettingsOpen}
               onMarkUnread={() => markIssue(selectedIssue.date, false)}
+              onMarkLinksVisited={markLinksVisited}
               onCodexSettingsChange={handleCodexSettingsChange}
               onToggleCodexSettings={handleToggleCodexSettings}
             />
@@ -213,9 +241,11 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
+  visitedLinks: VisitedLinkState;
   codexSettings: CodexSettings;
   isCodexSettingsOpen: boolean;
   onMarkUnread: () => void;
+  onMarkLinksVisited: (links: string[]) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
   onToggleCodexSettings: () => void;
 }
@@ -223,9 +253,11 @@ interface IssueDetailProps {
 function IssueDetail({
   issue,
   isRead,
+  visitedLinks,
   codexSettings,
   isCodexSettingsOpen,
   onMarkUnread,
+  onMarkLinksVisited,
   onCodexSettingsChange,
   onToggleCodexSettings,
 }: IssueDetailProps) {
@@ -274,23 +306,33 @@ function IssueDetail({
             <div className="post-main">
               <h3>
                 <a
-                  className="post-title-link"
+                  className={
+                    visitedLinks[post.hnCommentsUrl]
+                      ? "post-title-link visited"
+                      : "post-title-link"
+                  }
                   href={post.hnCommentsUrl}
                   target="_blank"
                   rel="noreferrer"
                   aria-label={`Open Hacker News comments: ${post.title}`}
                   title="Open Hacker News comments"
+                  onClick={() => onMarkLinksVisited([post.hnCommentsUrl])}
                 >
                   {post.title}
                 </a>
               </h3>
               <a
-                className="post-domain-link"
+                className={
+                  visitedLinks[post.originalUrl]
+                    ? "post-domain-link visited"
+                    : "post-domain-link"
+                }
                 href={post.originalUrl}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`Open original article: ${post.title}`}
                 title="Open original article"
+                onClick={() => onMarkLinksVisited([post.originalUrl])}
               >
                 {getDomain(post.originalUrl)}
               </a>
@@ -303,6 +345,9 @@ function IssueDetail({
                   codexSettings,
                 )}
                 title="Summarize with Codex"
+                onClick={() =>
+                  onMarkLinksVisited([post.originalUrl, post.hnCommentsUrl])
+                }
               >
                 <Sparkles size={16} />
                 Summarize

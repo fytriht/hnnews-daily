@@ -464,7 +464,8 @@ a {
   transition: color 160ms ease;
 }
 
-.post-title-link:visited {
+.post-title-link:visited,
+.post-title-link.visited {
   color: var(--visited);
 }
 
@@ -486,7 +487,8 @@ a {
   transition: color 160ms ease;
 }
 
-.post-domain-link:visited {
+.post-domain-link:visited,
+.post-domain-link.visited {
   color: var(--visited-soft);
 }
 
