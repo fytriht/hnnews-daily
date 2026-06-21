@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BookOpenCheck,
   ExternalLink,
+  Mail,
   MessageCircle,
   RefreshCw,
-  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import { buildCodexSummarizeUrl } from "./codex";
@@ -95,30 +94,8 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <BookOpenCheck size={20} />
-          </span>
-          <h1>HN Daily</h1>
-        </div>
-
-        <div className="topbar-actions">
-          <button
-            className="icon-button"
-            type="button"
-            onClick={() => void loadIssues()}
-            disabled={loadState === "loading"}
-            aria-label="Refresh feed"
-            title="Refresh feed"
-          >
-            <RefreshCw size={18} />
-          </button>
-        </div>
-      </header>
-
       <section className="workspace">
-        <aside className="issue-rail" aria-label="Recent daily issues">
+        <aside className="issue-rail" aria-label="Recent 10 daily issues">
           <div className="issue-list">
             {loadState === "loading" && issues.length === 0 ? (
               <IssueSkeleton />
@@ -175,7 +152,7 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
       <div className="detail-header">
         <div>
           <time dateTime={issue.date}>{formatHeadingDate(issue.date)}</time>
-          <h2>Daily Hacker News</h2>
+          <h2>Hacker News Daily</h2>
         </div>
 
         <button
@@ -186,7 +163,7 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
           aria-label="Mark selected issue unread"
           title="Mark unread"
         >
-          <RotateCcw size={16} />
+          <Mail size={16} />
         </button>
       </div>
 
@@ -238,7 +215,7 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
 function IssueSkeleton() {
   return (
     <>
-      {Array.from({ length: 7 }).map((_, index) => (
+      {Array.from({ length: 10 }).map((_, index) => (
         <div className="issue-row skeleton" key={index}>
           <span />
           <span />

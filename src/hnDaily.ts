@@ -1,7 +1,7 @@
 import type { DailyIssue, HnPost } from "./types";
 
 const FEED_URL = "/hn-daily/index.rss";
-const MAX_ISSUES = 7;
+const MAX_ISSUES = 10;
 
 export async function fetchDailyIssues(): Promise<DailyIssue[]> {
   const response = await fetch(FEED_URL, {

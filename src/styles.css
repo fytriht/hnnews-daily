@@ -53,48 +53,6 @@ a {
   padding: 24px;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 1220px;
-  margin: 0 auto 18px;
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  color: #fff;
-  background: var(--accent);
-}
-
-.brand h1 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 22px;
-  font-weight: 760;
-  line-height: 1.12;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -135,7 +93,7 @@ a {
   grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
   gap: 18px;
   max-width: 1220px;
-  min-height: calc(100vh - 100px);
+  min-height: calc(100vh - 48px);
   margin: 0 auto;
 }
 
@@ -474,17 +432,13 @@ a:focus-visible {
     padding: 12px;
   }
 
-  .topbar,
   .detail-header {
     align-items: stretch;
   }
 
-  .brand h1 {
-    font-size: 20px;
-  }
-
   .workspace {
     gap: 12px;
+    min-height: calc(100vh - 24px);
   }
 
   .issue-rail {
@@ -531,11 +485,5 @@ a:focus-visible {
   .post-actions {
     grid-column: 1;
     justify-content: flex-start;
-  }
-}
-
-@media (max-width: 440px) {
-  .topbar {
-    align-items: flex-start;
   }
 }
