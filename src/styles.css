@@ -182,7 +182,7 @@ a {
   width: 100%;
   min-height: 62px;
   padding: 11px 12px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 8px;
   color: var(--ink);
   background: transparent;
@@ -190,17 +190,14 @@ a {
   text-align: left;
   transition:
     background 160ms ease,
-    border-color 160ms ease,
     color 160ms ease;
 }
 
 .issue-row:hover {
-  border-color: var(--line-strong);
   background: var(--surface-subtle);
 }
 
 .issue-row.selected {
-  border-color: var(--accent-line);
   background: var(--accent-soft);
 }
 
@@ -208,7 +205,7 @@ a {
   position: absolute;
   top: 12px;
   bottom: 12px;
-  left: -1px;
+  left: 0;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--accent);
