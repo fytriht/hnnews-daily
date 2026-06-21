@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ExternalLink,
   Github,
   Info,
   MailOpen,
-  MessageCircle,
   RefreshCw,
   RotateCcw,
   Settings,
@@ -279,30 +277,30 @@ function IssueDetail({
               {String(index + 1).padStart(2, "0")}
             </span>
             <div className="post-main">
-              <h3>{post.title}</h3>
-              <div className="post-domain">{getDomain(post.originalUrl)}</div>
-            </div>
-            <div className="post-actions">
+              <h3>
+                <a
+                  className="post-title-link"
+                  href={post.hnCommentsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open Hacker News comments: ${post.title}`}
+                  title="Open Hacker News comments"
+                >
+                  {post.title}
+                </a>
+              </h3>
               <a
-                className="action-link"
+                className="post-domain-link"
                 href={post.originalUrl}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`Open original article: ${post.title}`}
                 title="Open original article"
               >
-                <ExternalLink size={16} />
+                {getDomain(post.originalUrl)}
               </a>
-              <a
-                className="action-link"
-                href={post.hnCommentsUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Open Hacker News comments: ${post.title}`}
-                title="Open Hacker News comments"
-              >
-                <MessageCircle size={16} />
-              </a>
+            </div>
+            <div className="post-actions">
               <a
                 className="summarize-link"
                 href={buildCodexSummarizeUrl(

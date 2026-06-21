@@ -288,7 +288,6 @@ a {
 
 .primary-button,
 .secondary-button,
-.action-link,
 .summarize-link {
   display: inline-flex;
   align-items: center;
@@ -485,13 +484,24 @@ a {
 
 .post-main h3 {
   margin: 0;
-  color: var(--ink);
   font-size: 17px;
   font-weight: 720;
   line-height: 1.28;
 }
 
-.post-domain {
+.post-title-link {
+  color: var(--ink);
+  transition: color 160ms ease;
+}
+
+.post-title-link:hover {
+  color: var(--focus);
+}
+
+.post-domain-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
   margin-top: 5px;
   overflow: hidden;
   color: var(--muted);
@@ -499,6 +509,11 @@ a {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 160ms ease;
+}
+
+.post-domain-link:hover {
+  color: var(--focus);
 }
 
 .post-actions {
@@ -506,20 +521,6 @@ a {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-}
-
-.action-link {
-  width: 32px;
-  height: 32px;
-  border: 1px solid transparent;
-  color: var(--muted);
-  background: transparent;
-}
-
-.action-link:hover {
-  color: var(--focus);
-  border-color: rgba(29, 115, 212, 0.14);
-  background: rgba(29, 115, 212, 0.06);
 }
 
 .summarize-link {
