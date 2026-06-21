@@ -467,15 +467,14 @@ a {
 .post-rank {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  justify-content: flex-start;
+  width: 38px;
+  height: 28px;
   color: var(--soft);
-  background: var(--surface-subtle);
   font-size: 12px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 .post-main {
@@ -528,12 +527,13 @@ a {
   min-height: 32px;
   padding: 0 9px;
   border: 1px solid transparent;
-  color: var(--accent-strong);
+  color: var(--muted);
   background: transparent;
   font-weight: 680;
 }
 
 .summarize-link:hover {
+  color: var(--accent-strong);
   border-color: rgba(255, 102, 0, 0.16);
   background: rgba(255, 102, 0, 0.07);
 }
@@ -590,38 +590,6 @@ textarea:focus-visible,
 
   .issue-rail {
     position: static;
-  }
-
-  .issue-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .post-row {
-    grid-template-columns: 38px minmax(0, 1fr);
-  }
-
-  .post-actions {
-    grid-column: 2;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-}
-
-@media (max-width: 700px) {
-  .app-shell {
-    padding: 12px;
-  }
-
-  .detail-header {
-    align-items: stretch;
-  }
-
-  .workspace {
-    gap: 12px;
-  }
-
-  .issue-rail {
     overflow: hidden;
   }
 
@@ -636,6 +604,35 @@ textarea:focus-visible,
   .issue-row {
     min-width: 112px;
     scroll-snap-align: start;
+  }
+
+  .post-row {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+
+  .post-actions {
+    grid-column: 3;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .detail-header {
+    align-items: stretch;
+  }
+
+  .workspace {
+    gap: 12px;
+  }
+
+  .issue-rail {
+    overflow: hidden;
   }
 
   .detail-header {
@@ -676,19 +673,25 @@ textarea:focus-visible,
   }
 
   .post-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    padding: 16px 0;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 6px;
+    min-height: 0;
+    padding: 14px 0;
   }
 
   .post-rank {
-    width: fit-content;
-    min-width: 32px;
-    padding: 0 9px;
+    grid-column: 1;
+    width: 36px;
+  }
+
+  .post-main {
+    grid-column: 2;
   }
 
   .post-actions {
-    grid-column: 1;
+    grid-column: 2;
     justify-content: flex-start;
   }
 }
