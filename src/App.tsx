@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ExternalLink,
-  Mail,
+  MailOpen,
   MessageCircle,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { buildCodexSummarizeUrl } from "./codex";
 import { fetchDailyIssues } from "./hnDaily";
-import {
-  readStoredReadState,
-  writeStoredReadState,
-} from "./storage";
+import { readStoredReadState, writeStoredReadState } from "./storage";
 import type { DailyIssue, ReadState } from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
@@ -34,12 +31,15 @@ type LoadState = "idle" | "loading" | "loaded" | "error";
 export function App() {
   const [issues, setIssues] = useState<DailyIssue[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [readState, setReadState] = useState<ReadState>(() => readStoredReadState());
+  const [readState, setReadState] = useState<ReadState>(() =>
+    readStoredReadState(),
+  );
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
 
   const selectedIssue = useMemo(
-    () => issues.find((issue) => issue.date === selectedDate) ?? issues[0] ?? null,
+    () =>
+      issues.find((issue) => issue.date === selectedDate) ?? issues[0] ?? null,
     [issues, selectedDate],
   );
 
@@ -163,14 +163,16 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
           aria-label="Mark selected issue unread"
           title="Mark unread"
         >
-          <Mail size={16} />
+          <MailOpen size={16} />
         </button>
       </div>
 
       <ol className="post-list">
         {issue.posts.map((post, index) => (
           <li className="post-row" key={post.id}>
-            <span className="post-rank">{String(index + 1).padStart(2, "0")}</span>
+            <span className="post-rank">
+              {String(index + 1).padStart(2, "0")}
+            </span>
             <div className="post-main">
               <h3>{post.title}</h3>
               <div className="post-domain">{getDomain(post.originalUrl)}</div>
@@ -198,7 +200,10 @@ function IssueDetail({ issue, isRead, onMarkUnread }: IssueDetailProps) {
               </a>
               <a
                 className="summarize-link"
-                href={buildCodexSummarizeUrl(post.originalUrl, post.hnCommentsUrl)}
+                href={buildCodexSummarizeUrl(
+                  post.originalUrl,
+                  post.hnCommentsUrl,
+                )}
                 title="Summarize with Codex"
               >
                 <Sparkles size={16} />
@@ -235,7 +240,11 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
     <div className="state-panel">
       <h2>Feed unavailable</h2>
       <p>{message ?? "The HN Daily RSS feed could not be loaded."}</p>
-      <button className="primary-button" type="button" onClick={() => void onRetry()}>
+      <button
+        className="primary-button"
+        type="button"
+        onClick={() => void onRetry()}
+      >
         <RefreshCw size={16} />
         Try again
       </button>
