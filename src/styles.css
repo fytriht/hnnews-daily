@@ -14,6 +14,8 @@
   --ink: #111318;
   --muted: #68707d;
   --soft: #929aa6;
+  --visited: #9fa7b4;
+  --visited-soft: #b7bdc7;
   --line: #e3e7ee;
   --line-strong: #d5dbe4;
   --surface: #ffffff;
@@ -462,6 +464,10 @@ a {
   transition: color 160ms ease;
 }
 
+.post-title-link:visited {
+  color: var(--visited);
+}
+
 .post-title-link:hover {
   color: var(--focus);
 }
@@ -478,6 +484,10 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: color 160ms ease;
+}
+
+.post-domain-link:visited {
+  color: var(--visited-soft);
 }
 
 .post-domain-link:hover {
