@@ -3,7 +3,7 @@ import {
   Github,
   Info,
   MailOpen,
-  RefreshCw,
+  RotateCw,
   RotateCcw,
   Settings,
   Sparkles,
@@ -44,6 +44,7 @@ const headingDateFormatter = new Intl.DateTimeFormat("en", {
 });
 
 type LoadState = "idle" | "loading" | "loaded" | "error";
+const MIN_REFRESH_SPIN_MS = 1000;
 
 export function App() {
   const [issues, setIssues] = useState<DailyIssue[]>([]);
@@ -63,6 +64,8 @@ export function App() {
   const [isCodexSettingsOpen, setIsCodexSettingsOpen] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const issuesRef = useRef<DailyIssue[]>([]);
+  const isLoadingRef = useRef(false);
 
   const selectedIssue = useMemo(
     () =>
@@ -111,11 +114,20 @@ export function App() {
   }, []);
 
   const loadIssues = useCallback(async () => {
+    if (isLoadingRef.current) {
+      return;
+    }
+
+    isLoadingRef.current = true;
+    const hadIssues = issuesRef.current.length > 0;
+    const loadStartedAt = Date.now();
+
     setLoadState("loading");
     setError(null);
 
     try {
       const nextIssues = await fetchDailyIssues();
+      issuesRef.current = nextIssues;
       setIssues(nextIssues);
       setSelectedDate((current) => {
         const storedDate = readStoredSelectedDate();
@@ -130,19 +142,37 @@ export function App() {
 
         return nextIssues[0]?.date ?? null;
       });
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
       setLoadState("loaded");
     } catch (loadError) {
-      setLoadState("error");
       setError(
         loadError instanceof Error
           ? loadError.message
           : "Failed to load HN Daily feed.",
       );
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
+      setLoadState(hadIssues ? "loaded" : "error");
+    } finally {
+      isLoadingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
     void loadIssues();
+  }, [loadIssues]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadIssues();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [loadIssues]);
 
   useEffect(() => {
@@ -203,9 +233,11 @@ export function App() {
             <IssueDetail
               issue={selectedIssue}
               isRead={Boolean(readState[selectedIssue.date])}
+              isLoading={loadState === "loading"}
               summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
               isCodexSettingsOpen={isCodexSettingsOpen}
+              onRefresh={() => void loadIssues()}
               onMarkUnread={() => markIssue(selectedIssue.date, false)}
               onMarkPostSummarized={markPostSummarized}
               onCodexSettingsChange={handleCodexSettingsChange}
@@ -236,9 +268,11 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
+  isLoading: boolean;
   summarizedPosts: SummarizedPostState;
   codexSettings: CodexSettings;
   isCodexSettingsOpen: boolean;
+  onRefresh: () => void;
   onMarkUnread: () => void;
   onMarkPostSummarized: (postId: string) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
@@ -248,14 +282,18 @@ interface IssueDetailProps {
 function IssueDetail({
   issue,
   isRead,
+  isLoading,
   summarizedPosts,
   codexSettings,
   isCodexSettingsOpen,
+  onRefresh,
   onMarkUnread,
   onMarkPostSummarized,
   onCodexSettingsChange,
   onToggleCodexSettings,
 }: IssueDetailProps) {
+  const refreshLabel = isLoading ? "Refreshing feed" : "Refresh feed";
+
   return (
     <>
       <div className="detail-header">
@@ -265,6 +303,17 @@ function IssueDetail({
         </div>
 
         <div className="detail-actions">
+          <Button
+            onClick={onRefresh}
+            disabled={isLoading}
+            aria-label={refreshLabel}
+            title={refreshLabel}
+          >
+            <RotateCw
+              className={isLoading ? "refresh-icon loading" : "refresh-icon"}
+              size={16}
+            />
+          </Button>
           <Button
             onClick={onMarkUnread}
             disabled={!isRead}
@@ -518,7 +567,7 @@ function ErrorState({ message, onRetry }: ErrorStateProps) {
       <h2>Feed unavailable</h2>
       <p>{message ?? "The HN Daily RSS feed could not be loaded."}</p>
       <Button onClick={() => void onRetry()}>
-        <RefreshCw size={16} />
+        <RotateCw size={16} />
         Try again
       </Button>
     </div>
@@ -556,4 +605,20 @@ function getDomain(url: string) {
   } catch {
     return url;
   }
+}
+
+function waitForMinimumLoadingTime(startedAt: number, shouldWait: boolean) {
+  if (!shouldWait) {
+    return Promise.resolve();
+  }
+
+  const remainingMs = MIN_REFRESH_SPIN_MS - (Date.now() - startedAt);
+
+  if (remainingMs <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, remainingMs);
+  });
 }

@@ -300,6 +300,10 @@ a {
   flex: 0 0 auto;
 }
 
+.refresh-icon.loading {
+  animation: refresh-spin 1s linear infinite;
+}
+
 .settings-dialog {
   width: min(680px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 32px));
@@ -540,6 +544,18 @@ textarea:focus-visible,
 
   to {
     background-position: -100% 0;
+  }
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refresh-icon.loading {
+    animation: none;
   }
 }
 
