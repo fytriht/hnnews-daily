@@ -240,6 +240,10 @@ a {
   display: none;
 }
 
+.issue-row.pending .issue-date {
+  color: var(--ink);
+}
+
 .issue-row.skeleton {
   cursor: default;
   background: linear-gradient(90deg, #f3f5f8, #ffffff, #f3f5f8);
@@ -542,6 +546,14 @@ a {
   font-weight: 400;
 }
 
+.post-row.skeleton {
+  pointer-events: none;
+}
+
+.post-row.skeleton .post-rank {
+  color: var(--soft);
+}
+
 .post-row:last-child {
   border-bottom: 0;
 }
@@ -602,6 +614,31 @@ a {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.post-skeleton-line,
+.post-skeleton-action {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef1f5, #ffffff, #eef1f5);
+  background-size: 260% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.post-skeleton-line.title {
+  width: min(420px, 86%);
+  height: 17px;
+}
+
+.post-skeleton-line.domain {
+  width: 130px;
+  height: 12px;
+  margin-top: 9px;
+}
+
+.post-skeleton-action {
+  width: 96px;
+  height: 36px;
 }
 
 .state-panel {

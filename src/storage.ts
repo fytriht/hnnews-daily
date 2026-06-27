@@ -2,15 +2,17 @@ import {
   DEFAULT_CODEX_PROMPT_TEMPLATE,
   type CodexSettings,
 } from "./codex";
-import type { ReadState, SummarizedPostState } from "./types";
+import type { DailyIssue, HnPost, ReadState, SummarizedPostState } from "./types";
 
 const READ_STATE_KEY = "hn-daily-reader:read-days";
 const SELECTED_DATE_KEY = "hn-daily-reader:selected-date";
 const CODEX_SETTINGS_KEY = "hn-daily-reader:codex-settings";
 const SUMMARIZED_POSTS_KEY = "hn-daily-reader:summarized-posts";
+const DAILY_ISSUES_CACHE_KEY = "hn-daily-reader:daily-issues-cache:v1";
 const SHARED_STATE_CACHE_KEY_PREFIX =
   "hn-daily-reader:shared-state-cache:v1:";
 const ISSUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const POST_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d+$/;
 const SHARE_ID_PATTERN = /^[A-Za-z0-9]{10}$/;
 
 export interface StoredSharedStateSnapshot {
@@ -69,6 +71,34 @@ export function writeStoredSummarizedPosts(
     SUMMARIZED_POSTS_KEY,
     JSON.stringify(summarizedPosts),
   );
+}
+
+export function readStoredDailyIssues(): DailyIssue[] {
+  try {
+    const raw = window.localStorage.getItem(DAILY_ISSUES_CACHE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map(readDailyIssue)
+      .filter((issue): issue is DailyIssue => Boolean(issue));
+  } catch {
+    return [];
+  }
+}
+
+export function writeStoredDailyIssues(issues: DailyIssue[]) {
+  if (issues.length === 0) {
+    return;
+  }
+
+  window.localStorage.setItem(DAILY_ISSUES_CACHE_KEY, JSON.stringify(issues));
 }
 
 export function readStoredSharedStateSnapshot(
@@ -195,4 +225,56 @@ function readTrueMap(value: unknown) {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue === true),
   ) as Record<string, boolean>;
+}
+
+function readDailyIssue(value: unknown): DailyIssue | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const issue = value as Record<string, unknown>;
+  if (
+    typeof issue.date !== "string" ||
+    !ISSUE_DATE_PATTERN.test(issue.date) ||
+    typeof issue.title !== "string" ||
+    typeof issue.permalink !== "string" ||
+    typeof issue.pubDate !== "string" ||
+    !Array.isArray(issue.posts)
+  ) {
+    return null;
+  }
+
+  return {
+    date: issue.date,
+    title: issue.title,
+    permalink: issue.permalink,
+    pubDate: issue.pubDate,
+    posts: issue.posts
+      .map(readHnPost)
+      .filter((post): post is HnPost => Boolean(post)),
+  };
+}
+
+function readHnPost(value: unknown): HnPost | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const post = value as Record<string, unknown>;
+  if (
+    typeof post.id !== "string" ||
+    !POST_ID_PATTERN.test(post.id) ||
+    typeof post.title !== "string" ||
+    typeof post.originalUrl !== "string" ||
+    typeof post.hnCommentsUrl !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: post.id,
+    title: post.title,
+    originalUrl: post.originalUrl,
+    hnCommentsUrl: post.hnCommentsUrl,
+  };
 }

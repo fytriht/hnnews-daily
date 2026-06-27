@@ -37,11 +37,13 @@ import {
 } from "./sharedState";
 import {
   readStoredCodexSettings,
+  readStoredDailyIssues,
   readStoredReadState,
   readStoredSelectedDate,
   readStoredSharedStateSnapshot,
   readStoredSummarizedPosts,
   writeStoredCodexSettings,
+  writeStoredDailyIssues,
   writeStoredReadState,
   writeStoredSelectedDate,
   writeStoredSharedStateSnapshot,
@@ -65,9 +67,11 @@ const headingDateFormatter = new Intl.DateTimeFormat("en", {
 });
 
 type LoadState = "idle" | "loading" | "loaded" | "error";
+type IssueSource = "generated" | "cache" | "remote";
 type SharedSyncStatus = "local" | "loading" | "syncing" | "synced" | "error";
 
 const MIN_REFRESH_SPIN_MS = 1000;
+const ISSUE_PLACEHOLDER_COUNT = 10;
 const SHARED_SYNC_DEBOUNCE_MS = 600;
 const SHARED_REFRESH_INTERVAL_MS = 30000;
 
@@ -79,6 +83,11 @@ interface PendingSharedStatePatch {
 interface InitialSharedState {
   shareId: string | null;
   snapshot: SharedStateSnapshot | null;
+}
+
+interface InitialIssueState {
+  issues: DailyIssue[];
+  source: IssueSource;
 }
 
 function createEmptySharedPatch(): PendingSharedStatePatch {
@@ -121,12 +130,62 @@ function readInitialSharedState(): InitialSharedState {
   };
 }
 
+function readInitialIssues(): InitialIssueState {
+  const cachedIssues = readStoredDailyIssues();
+
+  if (cachedIssues.length > 0) {
+    return {
+      issues: cachedIssues,
+      source: "cache",
+    };
+  }
+
+  return {
+    issues: createLocalIssuePlaceholders(),
+    source: "generated",
+  };
+}
+
+function createLocalIssuePlaceholders(): DailyIssue[] {
+  const latestIssueDate = new Date();
+  latestIssueDate.setUTCHours(0, 0, 0, 0);
+  latestIssueDate.setUTCDate(latestIssueDate.getUTCDate() - 1);
+
+  return Array.from({ length: ISSUE_PLACEHOLDER_COUNT }, (_, index) => {
+    const issueDate = new Date(latestIssueDate);
+    issueDate.setUTCDate(latestIssueDate.getUTCDate() - index);
+    const date = formatIssueDate(issueDate);
+
+    return {
+      date,
+      title: `Daily Hacker News for ${date}`,
+      permalink: "",
+      pubDate: "",
+      posts: [],
+    };
+  });
+}
+
+function formatIssueDate(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export function App() {
   const [initialSharedState] = useState(() => readInitialSharedState());
+  const [initialIssueState] = useState(() => readInitialIssues());
   const [shareId, setShareId] = useState<string | null>(
     initialSharedState.shareId,
   );
-  const [issues, setIssues] = useState<DailyIssue[]>([]);
+  const [issues, setIssues] = useState<DailyIssue[]>(
+    initialIssueState.issues,
+  );
+  const [issueSource, setIssueSource] = useState<IssueSource>(
+    initialIssueState.source,
+  );
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     readStoredSelectedDate(),
   );
@@ -146,7 +205,7 @@ export function App() {
   );
   const [isCodexSettingsOpen, setIsCodexSettingsOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [isSharedStateReady, setIsSharedStateReady] = useState(
     () => !initialSharedState.shareId || Boolean(initialSharedState.snapshot),
@@ -163,7 +222,7 @@ export function App() {
   );
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isShareLinkCopied, setIsShareLinkCopied] = useState(false);
-  const issuesRef = useRef<DailyIssue[]>([]);
+  const issuesRef = useRef<DailyIssue[]>(initialIssueState.issues);
   const isLoadingRef = useRef(false);
   const pendingSharedPatchRef = useRef<PendingSharedStatePatch>(
     createEmptySharedPatch(),
@@ -179,7 +238,9 @@ export function App() {
     [issues, selectedDate],
   );
   const selectedIssueDate = selectedIssue?.date ?? null;
+  const hasIssueContent = issueSource !== "generated";
   const isSharedStateKnown = !shareId || isSharedStateReady;
+  const isIssueReadStateKnown = hasIssueContent && isSharedStateKnown;
 
   const applySharedSnapshot = useCallback((snapshot: SharedStateSnapshot) => {
     readStateRef.current = snapshot.readState;
@@ -471,7 +532,9 @@ export function App() {
     }
 
     isLoadingRef.current = true;
-    const hadIssues = issuesRef.current.length > 0;
+    const hadIssueContent = issuesRef.current.some(
+      (issue) => issue.posts.length > 0,
+    );
     const loadStartedAt = Date.now();
 
     setLoadState("loading");
@@ -480,7 +543,9 @@ export function App() {
     try {
       const nextIssues = await fetchDailyIssues();
       issuesRef.current = nextIssues;
+      writeStoredDailyIssues(nextIssues);
       setIssues(nextIssues);
+      setIssueSource("remote");
       setSelectedDate((current) => {
         const storedDate = readStoredSelectedDate();
         const candidateDate = current ?? storedDate;
@@ -494,7 +559,7 @@ export function App() {
 
         return nextIssues[0]?.date ?? null;
       });
-      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssueContent);
       setLoadState("loaded");
     } catch (loadError) {
       setError(
@@ -502,8 +567,8 @@ export function App() {
           ? loadError.message
           : "Failed to load HN Daily feed.",
       );
-      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
-      setLoadState(hadIssues ? "loaded" : "error");
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssueContent);
+      setLoadState(hadIssueContent ? "loaded" : "error");
     } finally {
       isLoadingRef.current = false;
     }
@@ -581,12 +646,12 @@ export function App() {
   }, [loadState, selectedIssueDate]);
 
   useEffect(() => {
-    if (!selectedIssueDate || !isSharedStateReady) {
+    if (!selectedIssueDate || !hasIssueContent || !isSharedStateReady) {
       return;
     }
 
     markIssue(selectedIssueDate, true);
-  }, [isSharedStateReady, markIssue, selectedIssueDate]);
+  }, [hasIssueContent, isSharedStateReady, markIssue, selectedIssueDate]);
 
   const handleRefresh = useCallback(() => {
     void loadIssues();
@@ -595,7 +660,7 @@ export function App() {
 
   const handleSelectIssue = (issue: DailyIssue) => {
     setSelectedDate(issue.date);
-    if (isSharedStateKnown) {
+    if (isIssueReadStateKnown) {
       markIssue(issue.date, true);
     }
   };
@@ -605,50 +670,48 @@ export function App() {
       <section className="workspace">
         <aside className="issue-rail" aria-label="Recent 10 daily issues">
           <div className="issue-list">
-            {loadState === "loading" && issues.length === 0 ? (
-              <IssueSkeleton />
-            ) : (
-              issues.map((issue) => {
-                const isIssueRead = Boolean(readState[issue.date]);
-                const readStateClass = isSharedStateKnown
-                  ? isIssueRead
-                    ? "read"
-                    : "unread"
-                  : "pending";
+            {issues.map((issue) => {
+              const isIssueRead = Boolean(readState[issue.date]);
+              const readStateClass = isIssueReadStateKnown
+                ? isIssueRead
+                  ? "read"
+                  : "unread"
+                : "pending";
 
-                return (
-                  <button
-                    key={issue.date}
-                    type="button"
-                    className={`issue-row ${
-                      selectedIssue?.date === issue.date ? "selected" : ""
-                    } ${readStateClass}`}
-                    onClick={() => handleSelectIssue(issue)}
-                  >
-                    <span className="issue-date">
-                      {formatDate(issue.date)}
-                      <small>{formatWeekday(issue.date)}</small>
-                    </span>
-                    {isSharedStateKnown && !isIssueRead ? (
-                      <span className="read-dot" aria-label="Unread issue" />
-                    ) : null}
-                  </button>
-                );
-              })
-            )}
+              return (
+                <button
+                  key={issue.date}
+                  type="button"
+                  className={`issue-row ${
+                    selectedIssue?.date === issue.date ? "selected" : ""
+                  } ${readStateClass}`}
+                  onClick={() => handleSelectIssue(issue)}
+                >
+                  <span className="issue-date">
+                    {formatDate(issue.date)}
+                    <small>{formatWeekday(issue.date)}</small>
+                  </span>
+                  {isIssueReadStateKnown && !isIssueRead ? (
+                    <span className="read-dot" aria-label="Unread issue" />
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </aside>
 
         <section className="detail-pane" aria-live="polite">
           {loadState === "error" ? (
             <ErrorState message={error} onRetry={loadIssues} />
+          ) : selectedIssue && !hasIssueContent ? (
+            <IssueDetailLoading issue={selectedIssue} />
           ) : selectedIssue ? (
             <IssueDetail
               issue={selectedIssue}
               isRead={
-                isSharedStateKnown && Boolean(readState[selectedIssue.date])
+                isIssueReadStateKnown && Boolean(readState[selectedIssue.date])
               }
-              isSharedStateKnown={isSharedStateKnown}
+              isSharedStateKnown={isIssueReadStateKnown}
               isLoading={loadState === "loading"}
               summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
@@ -1151,15 +1214,42 @@ function CodexSettingsDialog({
   );
 }
 
-function IssueSkeleton() {
+interface IssueDetailLoadingProps {
+  issue: DailyIssue;
+}
+
+function IssueDetailLoading({ issue }: IssueDetailLoadingProps) {
   return (
     <>
-      {Array.from({ length: 10 }).map((_, index) => (
-        <div className="issue-row skeleton" key={index}>
-          <span />
-          <span />
+      <div className="detail-header">
+        <div>
+          <time dateTime={issue.date}>{formatHeadingDate(issue.date)}</time>
+          <h2>Hacker News Daily</h2>
         </div>
-      ))}
+
+        <div className="detail-actions">
+          <Button disabled aria-label="Loading feed" title="Loading feed">
+            <RotateCw className="refresh-icon loading" size={16} />
+          </Button>
+        </div>
+      </div>
+
+      <ol className="post-list" aria-label="Loading posts">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <li className="post-row skeleton" key={index}>
+            <span className="post-rank">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div className="post-main">
+              <span className="post-skeleton-line title" />
+              <span className="post-skeleton-line domain" />
+            </div>
+            <div className="post-actions">
+              <span className="post-skeleton-action" />
+            </div>
+          </li>
+        ))}
+      </ol>
     </>
   );
 }
