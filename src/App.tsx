@@ -308,24 +308,29 @@ export function App() {
     void loadSharedSnapshot();
   }, [loadSharedSnapshot, shareId]);
 
-  const copySharedLink = useCallback((id: string) => {
+  const copySharedLink = useCallback(async (id: string) => {
     const url = buildSharedStateUrl(id);
 
     setIsShareLinkCopied(true);
-    setSharedNotice("Shared link copied. Open it on another device to share progress.");
+    setSharedNotice(
+      "Shared link copied. Open it on another device to share progress.",
+    );
 
-    void navigator.clipboard.writeText(url).catch(() => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
       setSharedNotice(`Shared link is ready in the address bar: ${url}`);
-    });
+    }
   }, []);
 
   const handleShareReadState = useCallback(async () => {
     if (shareId) {
-      copySharedLink(shareId);
+      await copySharedLink(shareId);
       return;
     }
 
     setIsCreatingShare(true);
+    setIsShareLinkCopied(false);
     setSharedSyncStatus("syncing");
     setSharedSyncError(null);
     setSharedNotice("Creating shared link...");
@@ -344,7 +349,6 @@ export function App() {
       setSharedNotice(
         "Shared link created. Open this URL on another device to share read and summary status.",
       );
-      copySharedLink(id);
     } catch (shareError) {
       setSharedSyncStatus("error");
       setSharedSyncError(
@@ -846,6 +850,7 @@ function SharedStateDialog({
     : isCreatingShare
       ? "Creating"
       : "Create link";
+  const isActionDisabled = isCreatingShare || (isShared && isShareLinkCopied);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -933,7 +938,7 @@ function SharedStateDialog({
         <Button
           variant="outline"
           onClick={onShare}
-          disabled={isCreatingShare}
+          disabled={isActionDisabled}
           title={isShared ? "Copy shared link" : "Create shared link"}
         >
           {isShareLinkCopied ? <Check size={14} /> : <Copy size={14} />}

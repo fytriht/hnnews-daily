@@ -109,7 +109,7 @@ a {
 }
 
 .button:disabled {
-  cursor: default;
+  cursor: not-allowed;
   color: var(--soft);
   background: transparent;
   opacity: 0.58;
