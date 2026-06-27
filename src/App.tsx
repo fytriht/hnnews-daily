@@ -11,6 +11,7 @@ import {
   Copy,
   Github,
   Info,
+  Mail,
   MailOpen,
   RotateCw,
   RotateCcw,
@@ -724,7 +725,9 @@ export function App() {
               isCreatingShare={isCreatingShare}
               isShareLinkCopied={isShareLinkCopied}
               onRefresh={handleRefresh}
-              onMarkUnread={() => markIssue(selectedIssue.date, false)}
+              onToggleReadState={() =>
+                markIssue(selectedIssue.date, !readState[selectedIssue.date])
+              }
               onMarkPostSummarized={markPostSummarized}
               onCodexSettingsChange={handleCodexSettingsChange}
               onToggleCodexSettings={handleToggleCodexSettings}
@@ -770,7 +773,7 @@ interface IssueDetailProps {
   isCreatingShare: boolean;
   isShareLinkCopied: boolean;
   onRefresh: () => void;
-  onMarkUnread: () => void;
+  onToggleReadState: () => void;
   onMarkPostSummarized: (postId: string) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
   onToggleCodexSettings: () => void;
@@ -795,7 +798,7 @@ function IssueDetail({
   isCreatingShare,
   isShareLinkCopied,
   onRefresh,
-  onMarkUnread,
+  onToggleReadState,
   onMarkPostSummarized,
   onCodexSettingsChange,
   onToggleCodexSettings,
@@ -804,6 +807,16 @@ function IssueDetail({
   onRetrySharedSync,
 }: IssueDetailProps) {
   const refreshLabel = isLoading ? "Refreshing feed" : "Refresh feed";
+  const readToggleLabel = !isSharedStateKnown
+    ? "Read status loading"
+    : isRead
+      ? "Mark selected issue unread"
+      : "Mark selected issue read";
+  const readToggleTitle = !isSharedStateKnown
+    ? "Read status loading"
+    : isRead
+      ? "Mark unread"
+      : "Mark read";
   const shareLabel = shareId ? "Shared progress" : "Share progress";
 
   return (
@@ -827,12 +840,13 @@ function IssueDetail({
             />
           </Button>
           <Button
-            onClick={onMarkUnread}
-            disabled={!isRead}
-            aria-label="Mark selected issue unread"
-            title="Mark unread"
+            onClick={onToggleReadState}
+            disabled={!isSharedStateKnown}
+            aria-pressed={isSharedStateKnown ? isRead : undefined}
+            aria-label={readToggleLabel}
+            title={readToggleTitle}
           >
-            <MailOpen size={16} />
+            {isRead ? <MailOpen size={16} /> : <Mail size={16} />}
           </Button>
           <Button
             onClick={onToggleCodexSettings}
