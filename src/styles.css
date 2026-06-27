@@ -415,6 +415,100 @@ a {
   box-shadow: 0 0 0 3px rgba(29, 115, 212, 0.11);
 }
 
+.shared-state-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+
+.shared-state-panel.active {
+  background: #f7fbff;
+}
+
+.shared-state-content {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.shared-state-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shared-state-title-row h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.shared-state-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.shared-state-pill,
+.shared-state-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.shared-state-pill {
+  color: #0b5cad;
+  background: #e4f1ff;
+}
+
+.shared-state-status {
+  color: var(--muted);
+  background: #edf0f4;
+}
+
+.shared-state-status.synced {
+  color: #177245;
+  background: #e5f6ec;
+}
+
+.shared-state-status.syncing,
+.shared-state-status.loading {
+  color: #8a5a00;
+  background: #fff2cc;
+}
+
+.shared-state-status.error {
+  color: #b42318;
+  background: #fde8e5;
+}
+
+.shared-state-error {
+  color: #b42318 !important;
+}
+
+.shared-state-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .post-list {
   display: grid;
   gap: 0;
@@ -596,6 +690,10 @@ textarea:focus-visible,
     flex-wrap: wrap;
   }
 
+  .shared-state-panel {
+    align-items: flex-start;
+  }
+
 }
 
 @media (max-width: 560px) {
@@ -642,6 +740,16 @@ textarea:focus-visible,
 
   .settings-dialog-footer {
     padding: 0 18px 18px;
+  }
+
+  .shared-state-panel {
+    display: grid;
+    padding: 14px 18px;
+  }
+
+  .shared-state-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .post-list {
