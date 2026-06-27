@@ -39,10 +39,12 @@ import {
   readStoredCodexSettings,
   readStoredReadState,
   readStoredSelectedDate,
+  readStoredSharedStateSnapshot,
   readStoredSummarizedPosts,
   writeStoredCodexSettings,
   writeStoredReadState,
   writeStoredSelectedDate,
+  writeStoredSharedStateSnapshot,
   writeStoredSummarizedPosts,
 } from "./storage";
 import type { DailyIssue, ReadState, SummarizedPostState } from "./types";
@@ -72,6 +74,11 @@ const SHARED_REFRESH_INTERVAL_MS = 30000;
 interface PendingSharedStatePatch {
   readState: ReadState;
   summarizedPosts: SummarizedPostState;
+}
+
+interface InitialSharedState {
+  shareId: string | null;
+  snapshot: SharedStateSnapshot | null;
 }
 
 function createEmptySharedPatch(): PendingSharedStatePatch {
@@ -105,20 +112,33 @@ function consumeSharedPatch(
   return patch;
 }
 
+function readInitialSharedState(): InitialSharedState {
+  const shareId = readSharedStateIdFromUrl();
+
+  return {
+    shareId,
+    snapshot: shareId ? readStoredSharedStateSnapshot(shareId) : null,
+  };
+}
+
 export function App() {
-  const [shareId, setShareId] = useState<string | null>(() =>
-    readSharedStateIdFromUrl(),
+  const [initialSharedState] = useState(() => readInitialSharedState());
+  const [shareId, setShareId] = useState<string | null>(
+    initialSharedState.shareId,
   );
   const [issues, setIssues] = useState<DailyIssue[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     readStoredSelectedDate(),
   );
   const [readState, setReadState] = useState<ReadState>(() =>
-    readSharedStateIdFromUrl() ? {} : readStoredReadState(),
+    initialSharedState.snapshot?.readState ??
+    (initialSharedState.shareId ? {} : readStoredReadState()),
   );
   const readStateRef = useRef(readState);
   const [summarizedPosts, setSummarizedPosts] = useState<SummarizedPostState>(
-    () => (readSharedStateIdFromUrl() ? {} : readStoredSummarizedPosts()),
+    () =>
+      initialSharedState.snapshot?.summarizedPosts ??
+      (initialSharedState.shareId ? {} : readStoredSummarizedPosts()),
   );
   const summarizedPostsRef = useRef(summarizedPosts);
   const [codexSettings, setCodexSettings] = useState<CodexSettings>(() =>
@@ -128,12 +148,18 @@ export function App() {
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [isSharedStateReady, setIsSharedStateReady] = useState(() => !shareId);
+  const [isSharedStateReady, setIsSharedStateReady] = useState(
+    () => !initialSharedState.shareId || Boolean(initialSharedState.snapshot),
+  );
   const [sharedSyncStatus, setSharedSyncStatus] =
     useState<SharedSyncStatus>(() => (shareId ? "loading" : "local"));
   const [sharedSyncError, setSharedSyncError] = useState<string | null>(null);
   const [sharedNotice, setSharedNotice] = useState<string | null>(() =>
-    shareId ? "Loading shared read state..." : null,
+    initialSharedState.shareId
+      ? initialSharedState.snapshot
+        ? "Refreshing shared read state..."
+        : "Loading shared read state..."
+      : null,
   );
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isShareLinkCopied, setIsShareLinkCopied] = useState(false);
@@ -153,13 +179,17 @@ export function App() {
     [issues, selectedDate],
   );
   const selectedIssueDate = selectedIssue?.date ?? null;
+  const isSharedStateKnown = !shareId || isSharedStateReady;
 
   const applySharedSnapshot = useCallback((snapshot: SharedStateSnapshot) => {
     readStateRef.current = snapshot.readState;
     summarizedPostsRef.current = snapshot.summarizedPosts;
     setReadState(snapshot.readState);
     setSummarizedPosts(snapshot.summarizedPosts);
-  }, []);
+    if (shareId) {
+      writeStoredSharedStateSnapshot(shareId, snapshot);
+    }
+  }, [shareId]);
 
   const scheduleSharedPatchFlush = useCallback(
     (delay = SHARED_SYNC_DEBOUNCE_MS) => {
@@ -254,9 +284,6 @@ export function App() {
         return;
       }
 
-      if (initial) {
-        setIsSharedStateReady(false);
-      }
       if (!silent) {
         setSharedSyncStatus("loading");
       }
@@ -336,14 +363,16 @@ export function App() {
     setSharedNotice("Creating shared link...");
 
     try {
-      const id = await createSharedState({
+      const snapshot = {
         readState: readStateRef.current,
         summarizedPosts: summarizedPostsRef.current,
-      });
+      };
+      const id = await createSharedState(snapshot);
       const url = buildSharedStateUrl(id);
 
       window.history.replaceState(null, "", url);
-      setIsSharedStateReady(false);
+      writeStoredSharedStateSnapshot(id, snapshot);
+      setIsSharedStateReady(true);
       setShareId(id);
       setSharedSyncStatus("synced");
       setSharedNotice(
@@ -382,6 +411,10 @@ export function App() {
       setReadState(next);
 
       if (shareId) {
+        writeStoredSharedStateSnapshot(shareId, {
+          readState: next,
+          summarizedPosts: summarizedPostsRef.current,
+        });
         queueSharedPatch({ readState: { [date]: isRead } });
         return;
       }
@@ -411,6 +444,10 @@ export function App() {
       setSummarizedPosts(next);
 
       if (shareId) {
+        writeStoredSharedStateSnapshot(shareId, {
+          readState: readStateRef.current,
+          summarizedPosts: next,
+        });
         queueSharedPatch({ summarizedPosts: { [postId]: true } });
         return;
       }
@@ -558,7 +595,9 @@ export function App() {
 
   const handleSelectIssue = (issue: DailyIssue) => {
     setSelectedDate(issue.date);
-    markIssue(issue.date, true);
+    if (isSharedStateKnown) {
+      markIssue(issue.date, true);
+    }
   };
 
   return (
@@ -569,24 +608,33 @@ export function App() {
             {loadState === "loading" && issues.length === 0 ? (
               <IssueSkeleton />
             ) : (
-              issues.map((issue) => (
-                <button
-                  key={issue.date}
-                  type="button"
-                  className={`issue-row ${
-                    selectedIssue?.date === issue.date ? "selected" : ""
-                  } ${readState[issue.date] ? "read" : "unread"}`}
-                  onClick={() => handleSelectIssue(issue)}
-                >
-                  <span className="issue-date">
-                    {formatDate(issue.date)}
-                    <small>{formatWeekday(issue.date)}</small>
-                  </span>
-                  {!readState[issue.date] ? (
-                    <span className="read-dot" aria-label="Unread issue" />
-                  ) : null}
-                </button>
-              ))
+              issues.map((issue) => {
+                const isIssueRead = Boolean(readState[issue.date]);
+                const readStateClass = isSharedStateKnown
+                  ? isIssueRead
+                    ? "read"
+                    : "unread"
+                  : "pending";
+
+                return (
+                  <button
+                    key={issue.date}
+                    type="button"
+                    className={`issue-row ${
+                      selectedIssue?.date === issue.date ? "selected" : ""
+                    } ${readStateClass}`}
+                    onClick={() => handleSelectIssue(issue)}
+                  >
+                    <span className="issue-date">
+                      {formatDate(issue.date)}
+                      <small>{formatWeekday(issue.date)}</small>
+                    </span>
+                    {isSharedStateKnown && !isIssueRead ? (
+                      <span className="read-dot" aria-label="Unread issue" />
+                    ) : null}
+                  </button>
+                );
+              })
             )}
           </div>
         </aside>
@@ -597,7 +645,10 @@ export function App() {
           ) : selectedIssue ? (
             <IssueDetail
               issue={selectedIssue}
-              isRead={Boolean(readState[selectedIssue.date])}
+              isRead={
+                isSharedStateKnown && Boolean(readState[selectedIssue.date])
+              }
+              isSharedStateKnown={isSharedStateKnown}
               isLoading={loadState === "loading"}
               summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
@@ -643,6 +694,7 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
+  isSharedStateKnown: boolean;
   isLoading: boolean;
   summarizedPosts: SummarizedPostState;
   codexSettings: CodexSettings;
@@ -667,6 +719,7 @@ interface IssueDetailProps {
 function IssueDetail({
   issue,
   isRead,
+  isSharedStateKnown,
   isLoading,
   summarizedPosts,
   codexSettings,
@@ -761,56 +814,59 @@ function IssueDetail({
       />
 
       <ol className="post-list">
-        {issue.posts.map((post, index) => (
-          <li
-            className={
-              summarizedPosts[post.id] ? "post-row summarized" : "post-row"
-            }
-            key={post.id}
-          >
-            <span className="post-rank">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <div className="post-main">
-              <h3>
+        {issue.posts.map((post, index) => {
+          const isPostSummarized =
+            isSharedStateKnown && Boolean(summarizedPosts[post.id]);
+
+          return (
+            <li
+              className={isPostSummarized ? "post-row summarized" : "post-row"}
+              key={post.id}
+            >
+              <span className="post-rank">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div className="post-main">
+                <h3>
+                  <a
+                    className="post-title-link"
+                    href={post.hnCommentsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open Hacker News comments: ${post.title}`}
+                    title="Open Hacker News comments"
+                  >
+                    {post.title}
+                  </a>
+                </h3>
                 <a
-                  className="post-title-link"
-                  href={post.hnCommentsUrl}
+                  className="post-domain-link"
+                  href={post.originalUrl}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label={`Open Hacker News comments: ${post.title}`}
-                  title="Open Hacker News comments"
+                  aria-label={`Open original article: ${post.title}`}
+                  title="Open original article"
                 >
-                  {post.title}
+                  {getDomain(post.originalUrl)}
                 </a>
-              </h3>
-              <a
-                className="post-domain-link"
-                href={post.originalUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Open original article: ${post.title}`}
-                title="Open original article"
-              >
-                {getDomain(post.originalUrl)}
-              </a>
-            </div>
-            <div className="post-actions">
-              <Button
-                href={buildCodexSummarizeUrl(
-                  post.originalUrl,
-                  post.hnCommentsUrl,
-                  codexSettings,
-                )}
-                title="Summarize with Codex"
-                onClick={() => onMarkPostSummarized(post.id)}
-              >
-                <Sparkles size={16} />
-                Summarize
-              </Button>
-            </div>
-          </li>
-        ))}
+              </div>
+              <div className="post-actions">
+                <Button
+                  href={buildCodexSummarizeUrl(
+                    post.originalUrl,
+                    post.hnCommentsUrl,
+                    codexSettings,
+                  )}
+                  title="Summarize with Codex"
+                  onClick={() => onMarkPostSummarized(post.id)}
+                >
+                  <Sparkles size={16} />
+                  Summarize
+                </Button>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </>
   );
