@@ -17,7 +17,6 @@ import {
   RotateCcw,
   Settings,
   Share2,
-  Sparkles,
   X,
 } from "lucide-react";
 import { Button } from "./Button";
@@ -113,9 +112,7 @@ function mergeSharedPatch(
   Object.assign(target.summarizedPosts, patch.summarizedPosts);
 }
 
-function consumeSharedPatch(
-  target: MutableRefObject<PendingSharedStatePatch>,
-) {
+function consumeSharedPatch(target: MutableRefObject<PendingSharedStatePatch>) {
   const patch = target.current;
   target.current = createEmptySharedPatch();
 
@@ -181,18 +178,17 @@ export function App() {
   const [shareId, setShareId] = useState<string | null>(
     initialSharedState.shareId,
   );
-  const [issues, setIssues] = useState<DailyIssue[]>(
-    initialIssueState.issues,
-  );
+  const [issues, setIssues] = useState<DailyIssue[]>(initialIssueState.issues);
   const [issueSource, setIssueSource] = useState<IssueSource>(
     initialIssueState.source,
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     readStoredSelectedDate(),
   );
-  const [readState, setReadState] = useState<ReadState>(() =>
-    initialSharedState.snapshot?.readState ??
-    (initialSharedState.shareId ? {} : readStoredReadState()),
+  const [readState, setReadState] = useState<ReadState>(
+    () =>
+      initialSharedState.snapshot?.readState ??
+      (initialSharedState.shareId ? {} : readStoredReadState()),
   );
   const readStateRef = useRef(readState);
   const [summarizedPosts, setSummarizedPosts] = useState<SummarizedPostState>(
@@ -211,8 +207,9 @@ export function App() {
   const [isSharedStateReady, setIsSharedStateReady] = useState(
     () => !initialSharedState.shareId || Boolean(initialSharedState.snapshot),
   );
-  const [sharedSyncStatus, setSharedSyncStatus] =
-    useState<SharedSyncStatus>(() => (shareId ? "loading" : "local"));
+  const [sharedSyncStatus, setSharedSyncStatus] = useState<SharedSyncStatus>(
+    () => (shareId ? "loading" : "local"),
+  );
   const [sharedSyncError, setSharedSyncError] = useState<string | null>(null);
   const [sharedNotice, setSharedNotice] = useState<string | null>(() =>
     initialSharedState.shareId
@@ -243,15 +240,18 @@ export function App() {
   const isSharedStateKnown = !shareId || isSharedStateReady;
   const isIssueReadStateKnown = hasIssueContent && isSharedStateKnown;
 
-  const applySharedSnapshot = useCallback((snapshot: SharedStateSnapshot) => {
-    readStateRef.current = snapshot.readState;
-    summarizedPostsRef.current = snapshot.summarizedPosts;
-    setReadState(snapshot.readState);
-    setSummarizedPosts(snapshot.summarizedPosts);
-    if (shareId) {
-      writeStoredSharedStateSnapshot(shareId, snapshot);
-    }
-  }, [shareId]);
+  const applySharedSnapshot = useCallback(
+    (snapshot: SharedStateSnapshot) => {
+      readStateRef.current = snapshot.readState;
+      summarizedPostsRef.current = snapshot.summarizedPosts;
+      setReadState(snapshot.readState);
+      setSummarizedPosts(snapshot.summarizedPosts);
+      if (shareId) {
+        writeStoredSharedStateSnapshot(shareId, snapshot);
+      }
+    },
+    [shareId],
+  );
 
   const scheduleSharedPatchFlush = useCallback(
     (delay = SHARED_SYNC_DEBOUNCE_MS) => {
@@ -929,16 +929,17 @@ function IssueDetail({
               </div>
               <div className="post-actions">
                 <Button
+                  variant="outline"
                   href={buildCodexSummarizeUrl(
                     post.originalUrl,
                     post.hnCommentsUrl,
                     codexSettings,
                   )}
-                  title="Summarize with Codex"
+                  aria-label="Open in Codex"
+                  title="Open in Codex"
                   onClick={() => onMarkPostSummarized(post.id)}
                 >
-                  <Sparkles size={16} />
-                  Summarize
+                  <span className="codex-button-icon" aria-hidden="true" />
                 </Button>
               </div>
             </li>
