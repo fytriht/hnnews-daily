@@ -415,29 +415,17 @@ a {
   box-shadow: 0 0 0 3px rgba(29, 115, 212, 0.11);
 }
 
-.shared-state-panel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 14px 28px;
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-subtle);
-}
-
-.shared-state-panel.active {
-  background: #f7fbff;
-}
-
-.shared-state-content {
+.shared-state-dialog-body {
   display: grid;
-  gap: 5px;
+  gap: 9px;
   min-width: 0;
+  padding: 18px 22px;
 }
 
 .shared-state-title-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   min-width: 0;
 }
@@ -450,14 +438,35 @@ a {
   line-height: 1.25;
 }
 
-.shared-state-panel p {
+.shared-state-dialog-body p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.4;
 }
 
-.shared-state-pill,
+.shared-state-url-input {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface-subtle);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  outline: 0;
+}
+
+.shared-state-url-input:focus {
+  border-color: rgba(29, 115, 212, 0.5);
+  box-shadow: 0 0 0 3px rgba(29, 115, 212, 0.11);
+}
+
 .shared-state-status {
   display: inline-flex;
   align-items: center;
@@ -471,12 +480,8 @@ a {
   white-space: nowrap;
 }
 
-.shared-state-pill {
-  color: #0b5cad;
-  background: #e4f1ff;
-}
-
 .shared-state-status {
+  margin-left: auto;
   color: var(--muted);
   background: #edf0f4;
 }
@@ -501,12 +506,11 @@ a {
   color: #b42318 !important;
 }
 
-.shared-state-actions {
+.shared-state-dialog-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex: 0 0 auto;
 }
 
 .post-list {
@@ -690,10 +694,6 @@ textarea:focus-visible,
     flex-wrap: wrap;
   }
 
-  .shared-state-panel {
-    align-items: flex-start;
-  }
-
 }
 
 @media (max-width: 560px) {
@@ -742,12 +742,11 @@ textarea:focus-visible,
     padding: 0 18px 18px;
   }
 
-  .shared-state-panel {
-    display: grid;
-    padding: 14px 18px;
+  .shared-state-dialog-body {
+    padding: 16px 18px;
   }
 
-  .shared-state-actions {
+  .shared-state-dialog-footer {
     justify-content: flex-start;
     flex-wrap: wrap;
   }

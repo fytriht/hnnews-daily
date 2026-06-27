@@ -125,6 +125,7 @@ export function App() {
     readStoredCodexSettings(),
   );
   const [isCodexSettingsOpen, setIsCodexSettingsOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [isSharedStateReady, setIsSharedStateReady] = useState(() => !shareId);
@@ -145,7 +146,6 @@ export function App() {
   const isSharedPatchInFlightRef = useRef(false);
   const needsSharedPatchFlushRef = useRef(false);
   const flushSharedPatchRef = useRef<() => Promise<void>>(async () => {});
-  const shareCopiedTimerRef = useRef<number | null>(null);
 
   const selectedIssue = useMemo(
     () =>
@@ -308,29 +308,20 @@ export function App() {
     void loadSharedSnapshot();
   }, [loadSharedSnapshot, shareId]);
 
-  const copySharedLink = useCallback(async (id: string) => {
+  const copySharedLink = useCallback((id: string) => {
     const url = buildSharedStateUrl(id);
 
-    try {
-      await navigator.clipboard.writeText(url);
-      setIsShareLinkCopied(true);
-      setSharedNotice("Shared link copied. Open it on another device to share progress.");
+    setIsShareLinkCopied(true);
+    setSharedNotice("Shared link copied. Open it on another device to share progress.");
 
-      if (shareCopiedTimerRef.current !== null) {
-        window.clearTimeout(shareCopiedTimerRef.current);
-      }
-      shareCopiedTimerRef.current = window.setTimeout(() => {
-        setIsShareLinkCopied(false);
-        shareCopiedTimerRef.current = null;
-      }, 2200);
-    } catch {
+    void navigator.clipboard.writeText(url).catch(() => {
       setSharedNotice(`Shared link is ready in the address bar: ${url}`);
-    }
+    });
   }, []);
 
   const handleShareReadState = useCallback(async () => {
     if (shareId) {
-      await copySharedLink(shareId);
+      copySharedLink(shareId);
       return;
     }
 
@@ -353,7 +344,7 @@ export function App() {
       setSharedNotice(
         "Shared link created. Open this URL on another device to share read and summary status.",
       );
-      await copySharedLink(id);
+      copySharedLink(id);
     } catch (shareError) {
       setSharedSyncStatus("error");
       setSharedSyncError(
@@ -427,6 +418,10 @@ export function App() {
 
   const handleToggleCodexSettings = useCallback(() => {
     setIsCodexSettingsOpen((isOpen) => !isOpen);
+  }, []);
+
+  const handleToggleShareDialog = useCallback(() => {
+    setIsShareDialogOpen((isOpen) => !isOpen);
   }, []);
 
   const loadIssues = useCallback(async () => {
@@ -533,9 +528,6 @@ export function App() {
       if (sharedPatchTimerRef.current !== null) {
         window.clearTimeout(sharedPatchTimerRef.current);
       }
-      if (shareCopiedTimerRef.current !== null) {
-        window.clearTimeout(shareCopiedTimerRef.current);
-      }
     };
   }, []);
 
@@ -606,6 +598,7 @@ export function App() {
               summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
               isCodexSettingsOpen={isCodexSettingsOpen}
+              isShareDialogOpen={isShareDialogOpen}
               shareId={shareId}
               sharedSyncStatus={sharedSyncStatus}
               sharedSyncError={sharedSyncError}
@@ -617,6 +610,7 @@ export function App() {
               onMarkPostSummarized={markPostSummarized}
               onCodexSettingsChange={handleCodexSettingsChange}
               onToggleCodexSettings={handleToggleCodexSettings}
+              onToggleShareDialog={handleToggleShareDialog}
               onShareReadState={() => void handleShareReadState()}
               onRetrySharedSync={handleRetrySharedSync}
             />
@@ -649,6 +643,7 @@ interface IssueDetailProps {
   summarizedPosts: SummarizedPostState;
   codexSettings: CodexSettings;
   isCodexSettingsOpen: boolean;
+  isShareDialogOpen: boolean;
   shareId: string | null;
   sharedSyncStatus: SharedSyncStatus;
   sharedSyncError: string | null;
@@ -660,6 +655,7 @@ interface IssueDetailProps {
   onMarkPostSummarized: (postId: string) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
   onToggleCodexSettings: () => void;
+  onToggleShareDialog: () => void;
   onShareReadState: () => void;
   onRetrySharedSync: () => void;
 }
@@ -671,6 +667,7 @@ function IssueDetail({
   summarizedPosts,
   codexSettings,
   isCodexSettingsOpen,
+  isShareDialogOpen,
   shareId,
   sharedSyncStatus,
   sharedSyncError,
@@ -682,11 +679,12 @@ function IssueDetail({
   onMarkPostSummarized,
   onCodexSettingsChange,
   onToggleCodexSettings,
+  onToggleShareDialog,
   onShareReadState,
   onRetrySharedSync,
 }: IssueDetailProps) {
   const refreshLabel = isLoading ? "Refreshing feed" : "Refresh feed";
-  const shareLabel = shareId ? "Copy shared link" : "Create shared link";
+  const shareLabel = shareId ? "Shared progress" : "Share progress";
 
   return (
     <>
@@ -726,12 +724,14 @@ function IssueDetail({
             <Settings size={16} />
           </Button>
           <Button
-            onClick={onShareReadState}
+            onClick={onToggleShareDialog}
             disabled={isCreatingShare}
+            aria-expanded={isShareDialogOpen}
+            aria-controls="shared-state-dialog"
             aria-label={shareLabel}
             title={shareLabel}
           >
-            {isShareLinkCopied ? <Check size={16} /> : <Share2 size={16} />}
+            <Share2 size={16} />
           </Button>
         </div>
       </div>
@@ -743,7 +743,8 @@ function IssueDetail({
         onClose={onToggleCodexSettings}
       />
 
-      <SharedStatePanel
+      <SharedStateDialog
+        isOpen={isShareDialogOpen}
         shareId={shareId}
         status={sharedSyncStatus}
         error={sharedSyncError}
@@ -752,6 +753,7 @@ function IssueDetail({
         isShareLinkCopied={isShareLinkCopied}
         onShare={onShareReadState}
         onRetry={onRetrySharedSync}
+        onClose={onToggleShareDialog}
       />
 
       <ol className="post-list">
@@ -810,7 +812,8 @@ function IssueDetail({
   );
 }
 
-interface SharedStatePanelProps {
+interface SharedStateDialogProps {
+  isOpen: boolean;
   shareId: string | null;
   status: SharedSyncStatus;
   error: string | null;
@@ -819,9 +822,11 @@ interface SharedStatePanelProps {
   isShareLinkCopied: boolean;
   onShare: () => void;
   onRetry: () => void;
+  onClose: () => void;
 }
 
-function SharedStatePanel({
+function SharedStateDialog({
+  isOpen,
   shareId,
   status,
   error,
@@ -830,7 +835,9 @@ function SharedStatePanel({
   isShareLinkCopied,
   onShare,
   onRetry,
-}: SharedStatePanelProps) {
+  onClose,
+}: SharedStateDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const isShared = Boolean(shareId);
   const actionLabel = isShared
     ? isShareLinkCopied
@@ -840,21 +847,62 @@ function SharedStatePanel({
       ? "Creating"
       : "Create link";
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (isOpen && !dialog.open) {
+      dialog.showModal();
+      return;
+    }
+
+    if (!isOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
+
+  const sharedUrl = shareId ? buildSharedStateUrl(shareId) : null;
+
   return (
-    <section
-      className={isShared ? "shared-state-panel active" : "shared-state-panel"}
+    <dialog
+      className="settings-dialog shared-state-dialog"
+      id="shared-state-dialog"
+      ref={dialogRef}
       aria-live="polite"
+      aria-labelledby="shared-state-title"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
     >
-      <div className="shared-state-content">
+      <div className="settings-dialog-header">
+        <h2 id="shared-state-title">Shared progress</h2>
+        <Button
+          onClick={onClose}
+          aria-label="Close shared progress"
+          title="Close"
+        >
+          <X size={16} />
+        </Button>
+      </div>
+
+      <div className="shared-state-dialog-body">
         <div className="shared-state-title-row">
-          {isShared ? (
-            <span className="shared-state-pill">Shared</span>
-          ) : null}
           <h3>
             {isShared
               ? "Shared progress is on"
               : "Share progress across devices"}
           </h3>
+          {isShared ? (
+            <span className={`shared-state-status ${status}`}>
+              {formatSharedSyncStatus(status)}
+            </span>
+          ) : null}
         </div>
         <p>
           {notice ??
@@ -862,14 +910,20 @@ function SharedStatePanel({
               ? "Devices using this URL share read and summary status."
               : "Create a short link, then open it anywhere to share read and summary status.")}
         </p>
+        {sharedUrl ? (
+          <input
+            className="shared-state-url-input"
+            type="text"
+            value={sharedUrl}
+            readOnly
+            aria-label="Shared link"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        ) : null}
         {error ? <p className="shared-state-error">{error}</p> : null}
       </div>
-      <div className="shared-state-actions">
-        {isShared ? (
-          <span className={`shared-state-status ${status}`}>
-            {formatSharedSyncStatus(status)}
-          </span>
-        ) : null}
+
+      <div className="settings-dialog-footer shared-state-dialog-footer">
         {error && isShared ? (
           <Button variant="outline" onClick={onRetry}>
             <RotateCw size={14} />
@@ -886,7 +940,7 @@ function SharedStatePanel({
           {actionLabel}
         </Button>
       </div>
-    </section>
+    </dialog>
   );
 }
 
