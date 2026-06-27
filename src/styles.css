@@ -109,7 +109,7 @@ a {
 }
 
 .button:disabled {
-  cursor: default;
+  cursor: not-allowed;
   color: var(--soft);
   background: transparent;
   opacity: 0.58;
@@ -238,6 +238,10 @@ a {
 
 .issue-row.read .read-dot {
   display: none;
+}
+
+.issue-row.pending .issue-date {
+  color: var(--ink);
 }
 
 .issue-row.skeleton {
@@ -415,6 +419,104 @@ a {
   box-shadow: 0 0 0 3px rgba(29, 115, 212, 0.11);
 }
 
+.shared-state-dialog-body {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 18px 22px;
+}
+
+.shared-state-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shared-state-title-row h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.shared-state-dialog-body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.shared-state-url-input {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface-subtle);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  outline: 0;
+}
+
+.shared-state-url-input:focus {
+  border-color: rgba(29, 115, 212, 0.5);
+  box-shadow: 0 0 0 3px rgba(29, 115, 212, 0.11);
+}
+
+.shared-state-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.shared-state-status {
+  margin-left: auto;
+  color: var(--muted);
+  background: #edf0f4;
+}
+
+.shared-state-status.synced {
+  color: #177245;
+  background: #e5f6ec;
+}
+
+.shared-state-status.syncing,
+.shared-state-status.loading {
+  color: #8a5a00;
+  background: #fff2cc;
+}
+
+.shared-state-status.error {
+  color: #b42318;
+  background: #fde8e5;
+}
+
+.shared-state-error {
+  color: #b42318 !important;
+}
+
+.shared-state-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .post-list {
   display: grid;
   gap: 0;
@@ -442,6 +544,14 @@ a {
 .post-row.summarized .post-main h3,
 .post-row.summarized .button {
   font-weight: 400;
+}
+
+.post-row.skeleton {
+  pointer-events: none;
+}
+
+.post-row.skeleton .post-rank {
+  color: var(--soft);
 }
 
 .post-row:last-child {
@@ -504,6 +614,31 @@ a {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.post-skeleton-line,
+.post-skeleton-action {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef1f5, #ffffff, #eef1f5);
+  background-size: 260% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.post-skeleton-line.title {
+  width: min(420px, 86%);
+  height: 17px;
+}
+
+.post-skeleton-line.domain {
+  width: 130px;
+  height: 12px;
+  margin-top: 9px;
+}
+
+.post-skeleton-action {
+  width: 96px;
+  height: 36px;
 }
 
 .state-panel {
@@ -642,6 +777,15 @@ textarea:focus-visible,
 
   .settings-dialog-footer {
     padding: 0 18px 18px;
+  }
+
+  .shared-state-dialog-body {
+    padding: 16px 18px;
+  }
+
+  .shared-state-dialog-footer {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .post-list {

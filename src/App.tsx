@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
+import {
+  Check,
+  Copy,
   Github,
   Info,
   MailOpen,
   RotateCw,
   RotateCcw,
   Settings,
+  Share2,
   Sparkles,
   X,
 } from "lucide-react";
@@ -17,13 +27,26 @@ import {
 } from "./codex";
 import { fetchDailyIssues } from "./hnDaily";
 import {
+  buildSharedStateUrl,
+  createSharedState,
+  loadSharedState,
+  patchSharedState,
+  readSharedStateIdFromUrl,
+  type SharedStatePatch,
+  type SharedStateSnapshot,
+} from "./sharedState";
+import {
   readStoredCodexSettings,
+  readStoredDailyIssues,
   readStoredReadState,
   readStoredSelectedDate,
+  readStoredSharedStateSnapshot,
   readStoredSummarizedPosts,
   writeStoredCodexSettings,
+  writeStoredDailyIssues,
   writeStoredReadState,
   writeStoredSelectedDate,
+  writeStoredSharedStateSnapshot,
   writeStoredSummarizedPosts,
 } from "./storage";
 import type { DailyIssue, ReadState, SummarizedPostState } from "./types";
@@ -44,28 +67,170 @@ const headingDateFormatter = new Intl.DateTimeFormat("en", {
 });
 
 type LoadState = "idle" | "loading" | "loaded" | "error";
+type IssueSource = "generated" | "cache" | "remote";
+type SharedSyncStatus = "local" | "loading" | "syncing" | "synced" | "error";
+
 const MIN_REFRESH_SPIN_MS = 1000;
+const ISSUE_PLACEHOLDER_COUNT = 10;
+const SHARED_SYNC_DEBOUNCE_MS = 600;
+const SHARED_REFRESH_INTERVAL_MS = 30000;
+
+interface PendingSharedStatePatch {
+  readState: ReadState;
+  summarizedPosts: SummarizedPostState;
+}
+
+interface InitialSharedState {
+  shareId: string | null;
+  snapshot: SharedStateSnapshot | null;
+}
+
+interface InitialIssueState {
+  issues: DailyIssue[];
+  source: IssueSource;
+}
+
+function createEmptySharedPatch(): PendingSharedStatePatch {
+  return {
+    readState: {},
+    summarizedPosts: {},
+  };
+}
+
+function hasSharedPatch(patch: SharedStatePatch) {
+  return (
+    Object.keys(patch.readState ?? {}).length > 0 ||
+    Object.keys(patch.summarizedPosts ?? {}).length > 0
+  );
+}
+
+function mergeSharedPatch(
+  target: PendingSharedStatePatch,
+  patch: SharedStatePatch,
+) {
+  Object.assign(target.readState, patch.readState);
+  Object.assign(target.summarizedPosts, patch.summarizedPosts);
+}
+
+function consumeSharedPatch(
+  target: MutableRefObject<PendingSharedStatePatch>,
+) {
+  const patch = target.current;
+  target.current = createEmptySharedPatch();
+
+  return patch;
+}
+
+function readInitialSharedState(): InitialSharedState {
+  const shareId = readSharedStateIdFromUrl();
+
+  return {
+    shareId,
+    snapshot: shareId ? readStoredSharedStateSnapshot(shareId) : null,
+  };
+}
+
+function readInitialIssues(): InitialIssueState {
+  const cachedIssues = readStoredDailyIssues();
+
+  if (cachedIssues.length > 0) {
+    return {
+      issues: cachedIssues,
+      source: "cache",
+    };
+  }
+
+  return {
+    issues: createLocalIssuePlaceholders(),
+    source: "generated",
+  };
+}
+
+function createLocalIssuePlaceholders(): DailyIssue[] {
+  const latestIssueDate = new Date();
+  latestIssueDate.setUTCHours(0, 0, 0, 0);
+  latestIssueDate.setUTCDate(latestIssueDate.getUTCDate() - 1);
+
+  return Array.from({ length: ISSUE_PLACEHOLDER_COUNT }, (_, index) => {
+    const issueDate = new Date(latestIssueDate);
+    issueDate.setUTCDate(latestIssueDate.getUTCDate() - index);
+    const date = formatIssueDate(issueDate);
+
+    return {
+      date,
+      title: `Daily Hacker News for ${date}`,
+      permalink: "",
+      pubDate: "",
+      posts: [],
+    };
+  });
+}
+
+function formatIssueDate(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 export function App() {
-  const [issues, setIssues] = useState<DailyIssue[]>([]);
+  const [initialSharedState] = useState(() => readInitialSharedState());
+  const [initialIssueState] = useState(() => readInitialIssues());
+  const [shareId, setShareId] = useState<string | null>(
+    initialSharedState.shareId,
+  );
+  const [issues, setIssues] = useState<DailyIssue[]>(
+    initialIssueState.issues,
+  );
+  const [issueSource, setIssueSource] = useState<IssueSource>(
+    initialIssueState.source,
+  );
   const [selectedDate, setSelectedDate] = useState<string | null>(() =>
     readStoredSelectedDate(),
   );
   const [readState, setReadState] = useState<ReadState>(() =>
-    readStoredReadState(),
+    initialSharedState.snapshot?.readState ??
+    (initialSharedState.shareId ? {} : readStoredReadState()),
   );
+  const readStateRef = useRef(readState);
   const [summarizedPosts, setSummarizedPosts] = useState<SummarizedPostState>(
-    () => readStoredSummarizedPosts(),
+    () =>
+      initialSharedState.snapshot?.summarizedPosts ??
+      (initialSharedState.shareId ? {} : readStoredSummarizedPosts()),
   );
   const summarizedPostsRef = useRef(summarizedPosts);
   const [codexSettings, setCodexSettings] = useState<CodexSettings>(() =>
     readStoredCodexSettings(),
   );
   const [isCodexSettingsOpen, setIsCodexSettingsOpen] = useState(false);
-  const [loadState, setLoadState] = useState<LoadState>("idle");
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [loadState, setLoadState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
-  const issuesRef = useRef<DailyIssue[]>([]);
+  const [isSharedStateReady, setIsSharedStateReady] = useState(
+    () => !initialSharedState.shareId || Boolean(initialSharedState.snapshot),
+  );
+  const [sharedSyncStatus, setSharedSyncStatus] =
+    useState<SharedSyncStatus>(() => (shareId ? "loading" : "local"));
+  const [sharedSyncError, setSharedSyncError] = useState<string | null>(null);
+  const [sharedNotice, setSharedNotice] = useState<string | null>(() =>
+    initialSharedState.shareId
+      ? initialSharedState.snapshot
+        ? "Refreshing shared read state..."
+        : "Loading shared read state..."
+      : null,
+  );
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [isShareLinkCopied, setIsShareLinkCopied] = useState(false);
+  const issuesRef = useRef<DailyIssue[]>(initialIssueState.issues);
   const isLoadingRef = useRef(false);
+  const pendingSharedPatchRef = useRef<PendingSharedStatePatch>(
+    createEmptySharedPatch(),
+  );
+  const sharedPatchTimerRef = useRef<number | null>(null);
+  const isSharedPatchInFlightRef = useRef(false);
+  const needsSharedPatchFlushRef = useRef(false);
+  const flushSharedPatchRef = useRef<() => Promise<void>>(async () => {});
 
   const selectedIssue = useMemo(
     () =>
@@ -73,9 +238,228 @@ export function App() {
     [issues, selectedDate],
   );
   const selectedIssueDate = selectedIssue?.date ?? null;
+  const hasIssueContent = issueSource !== "generated";
+  const isSharedStateKnown = !shareId || isSharedStateReady;
+  const isIssueReadStateKnown = hasIssueContent && isSharedStateKnown;
 
-  const markIssue = useCallback((date: string, isRead: boolean) => {
-    setReadState((current) => {
+  const applySharedSnapshot = useCallback((snapshot: SharedStateSnapshot) => {
+    readStateRef.current = snapshot.readState;
+    summarizedPostsRef.current = snapshot.summarizedPosts;
+    setReadState(snapshot.readState);
+    setSummarizedPosts(snapshot.summarizedPosts);
+    if (shareId) {
+      writeStoredSharedStateSnapshot(shareId, snapshot);
+    }
+  }, [shareId]);
+
+  const scheduleSharedPatchFlush = useCallback(
+    (delay = SHARED_SYNC_DEBOUNCE_MS) => {
+      if (sharedPatchTimerRef.current !== null) {
+        window.clearTimeout(sharedPatchTimerRef.current);
+      }
+
+      sharedPatchTimerRef.current = window.setTimeout(() => {
+        sharedPatchTimerRef.current = null;
+        void flushSharedPatchRef.current();
+      }, delay);
+    },
+    [],
+  );
+
+  const flushSharedPatch = useCallback(async () => {
+    if (!shareId) {
+      return;
+    }
+
+    if (isSharedPatchInFlightRef.current) {
+      needsSharedPatchFlushRef.current = true;
+      return;
+    }
+
+    const patch = consumeSharedPatch(pendingSharedPatchRef);
+    if (!hasSharedPatch(patch)) {
+      setSharedSyncStatus("synced");
+      return;
+    }
+
+    isSharedPatchInFlightRef.current = true;
+    setSharedSyncStatus("syncing");
+    setSharedSyncError(null);
+
+    try {
+      await patchSharedState(shareId, patch);
+    } catch (syncError) {
+      mergeSharedPatch(pendingSharedPatchRef.current, patch);
+      setSharedSyncStatus("error");
+      setSharedSyncError(
+        syncError instanceof Error
+          ? syncError.message
+          : "Unable to sync shared state.",
+      );
+      return;
+    } finally {
+      isSharedPatchInFlightRef.current = false;
+    }
+
+    if (
+      needsSharedPatchFlushRef.current ||
+      hasSharedPatch(pendingSharedPatchRef.current)
+    ) {
+      needsSharedPatchFlushRef.current = false;
+      scheduleSharedPatchFlush(0);
+      return;
+    }
+
+    setSharedSyncStatus("synced");
+    setSharedNotice("Shared read state is up to date.");
+  }, [scheduleSharedPatchFlush, shareId]);
+
+  useEffect(() => {
+    flushSharedPatchRef.current = flushSharedPatch;
+  }, [flushSharedPatch]);
+
+  const queueSharedPatch = useCallback(
+    (patch: SharedStatePatch) => {
+      if (!shareId) {
+        return;
+      }
+
+      mergeSharedPatch(pendingSharedPatchRef.current, patch);
+      setSharedSyncStatus("syncing");
+      setSharedSyncError(null);
+      scheduleSharedPatchFlush();
+    },
+    [scheduleSharedPatchFlush, shareId],
+  );
+
+  const loadSharedSnapshot = useCallback(
+    async ({ initial = false, silent = false } = {}) => {
+      if (!shareId) {
+        return;
+      }
+
+      if (
+        isSharedPatchInFlightRef.current ||
+        hasSharedPatch(pendingSharedPatchRef.current)
+      ) {
+        return;
+      }
+
+      if (!silent) {
+        setSharedSyncStatus("loading");
+      }
+      setSharedSyncError(null);
+
+      try {
+        const snapshot = await loadSharedState(shareId);
+
+        if (
+          isSharedPatchInFlightRef.current ||
+          hasSharedPatch(pendingSharedPatchRef.current)
+        ) {
+          return;
+        }
+
+        applySharedSnapshot(snapshot);
+        setIsSharedStateReady(true);
+        setSharedSyncStatus("synced");
+        setSharedNotice(
+          "Shared read state is active. Anyone with this link can update it.",
+        );
+      } catch (loadError) {
+        setSharedSyncStatus("error");
+        setSharedSyncError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load shared state.",
+        );
+        if (initial) {
+          setSharedNotice(
+            "Shared read state could not be loaded. Retry before relying on this link.",
+          );
+        }
+      }
+    },
+    [applySharedSnapshot, shareId],
+  );
+
+  const handleRetrySharedSync = useCallback(() => {
+    if (!shareId) {
+      return;
+    }
+
+    if (hasSharedPatch(pendingSharedPatchRef.current)) {
+      void flushSharedPatchRef.current();
+      return;
+    }
+
+    void loadSharedSnapshot();
+  }, [loadSharedSnapshot, shareId]);
+
+  const copySharedLink = useCallback(async (id: string) => {
+    const url = buildSharedStateUrl(id);
+
+    setIsShareLinkCopied(true);
+    setSharedNotice(
+      "Shared link copied. Open it on another device to share progress.",
+    );
+
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      setSharedNotice(`Shared link is ready in the address bar: ${url}`);
+    }
+  }, []);
+
+  const handleShareReadState = useCallback(async () => {
+    if (shareId) {
+      await copySharedLink(shareId);
+      return;
+    }
+
+    setIsCreatingShare(true);
+    setIsShareLinkCopied(false);
+    setSharedSyncStatus("syncing");
+    setSharedSyncError(null);
+    setSharedNotice("Creating shared link...");
+
+    try {
+      const snapshot = {
+        readState: readStateRef.current,
+        summarizedPosts: summarizedPostsRef.current,
+      };
+      const id = await createSharedState(snapshot);
+      const url = buildSharedStateUrl(id);
+
+      window.history.replaceState(null, "", url);
+      writeStoredSharedStateSnapshot(id, snapshot);
+      setIsSharedStateReady(true);
+      setShareId(id);
+      setSharedSyncStatus("synced");
+      setSharedNotice(
+        "Shared link created. Open this URL on another device to share read and summary status.",
+      );
+    } catch (shareError) {
+      setSharedSyncStatus("error");
+      setSharedSyncError(
+        shareError instanceof Error
+          ? shareError.message
+          : "Unable to create shared link.",
+      );
+      setSharedNotice("Shared link could not be created. You can retry.");
+    } finally {
+      setIsCreatingShare(false);
+    }
+  }, [copySharedLink, shareId]);
+
+  const markIssue = useCallback(
+    (date: string, isRead: boolean) => {
+      const current = readStateRef.current;
+
+      if (Boolean(current[date]) === isRead) {
+        return;
+      }
+
       const next = { ...current };
 
       if (isRead) {
@@ -84,33 +468,62 @@ export function App() {
         delete next[date];
       }
 
+      readStateRef.current = next;
+      setReadState(next);
+
+      if (shareId) {
+        writeStoredSharedStateSnapshot(shareId, {
+          readState: next,
+          summarizedPosts: summarizedPostsRef.current,
+        });
+        queueSharedPatch({ readState: { [date]: isRead } });
+        return;
+      }
+
       writeStoredReadState(next);
-      return next;
-    });
-  }, []);
+    },
+    [queueSharedPatch, shareId],
+  );
 
   const handleCodexSettingsChange = useCallback((settings: CodexSettings) => {
     setCodexSettings(settings);
     writeStoredCodexSettings(settings);
   }, []);
 
-  const markPostSummarized = useCallback((postId: string) => {
-    if (summarizedPostsRef.current[postId]) {
-      return;
-    }
+  const markPostSummarized = useCallback(
+    (postId: string) => {
+      if (summarizedPostsRef.current[postId]) {
+        return;
+      }
 
-    const next = {
-      ...summarizedPostsRef.current,
-      [postId]: true,
-    };
+      const next = {
+        ...summarizedPostsRef.current,
+        [postId]: true,
+      };
 
-    summarizedPostsRef.current = next;
-    writeStoredSummarizedPosts(next);
-    setSummarizedPosts(next);
-  }, []);
+      summarizedPostsRef.current = next;
+      setSummarizedPosts(next);
+
+      if (shareId) {
+        writeStoredSharedStateSnapshot(shareId, {
+          readState: readStateRef.current,
+          summarizedPosts: next,
+        });
+        queueSharedPatch({ summarizedPosts: { [postId]: true } });
+        return;
+      }
+
+      writeStoredSummarizedPosts(next);
+    },
+    [queueSharedPatch, shareId],
+  );
 
   const handleToggleCodexSettings = useCallback(() => {
     setIsCodexSettingsOpen((isOpen) => !isOpen);
+  }, []);
+
+  const handleToggleShareDialog = useCallback(() => {
+    setIsShareDialogOpen((isOpen) => !isOpen);
   }, []);
 
   const loadIssues = useCallback(async () => {
@@ -119,7 +532,9 @@ export function App() {
     }
 
     isLoadingRef.current = true;
-    const hadIssues = issuesRef.current.length > 0;
+    const hadIssueContent = issuesRef.current.some(
+      (issue) => issue.posts.length > 0,
+    );
     const loadStartedAt = Date.now();
 
     setLoadState("loading");
@@ -128,7 +543,9 @@ export function App() {
     try {
       const nextIssues = await fetchDailyIssues();
       issuesRef.current = nextIssues;
+      writeStoredDailyIssues(nextIssues);
       setIssues(nextIssues);
+      setIssueSource("remote");
       setSelectedDate((current) => {
         const storedDate = readStoredSelectedDate();
         const candidateDate = current ?? storedDate;
@@ -142,7 +559,7 @@ export function App() {
 
         return nextIssues[0]?.date ?? null;
       });
-      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssueContent);
       setLoadState("loaded");
     } catch (loadError) {
       setError(
@@ -150,8 +567,8 @@ export function App() {
           ? loadError.message
           : "Failed to load HN Daily feed.",
       );
-      await waitForMinimumLoadingTime(loadStartedAt, hadIssues);
-      setLoadState(hadIssues ? "loaded" : "error");
+      await waitForMinimumLoadingTime(loadStartedAt, hadIssueContent);
+      setLoadState(hadIssueContent ? "loaded" : "error");
     } finally {
       isLoadingRef.current = false;
     }
@@ -162,9 +579,46 @@ export function App() {
   }, [loadIssues]);
 
   useEffect(() => {
+    if (!shareId) {
+      setIsSharedStateReady(true);
+      setSharedSyncStatus("local");
+      setSharedSyncError(null);
+      pendingSharedPatchRef.current = createEmptySharedPatch();
+      return;
+    }
+
+    pendingSharedPatchRef.current = createEmptySharedPatch();
+    needsSharedPatchFlushRef.current = false;
+
+    if (sharedPatchTimerRef.current !== null) {
+      window.clearTimeout(sharedPatchTimerRef.current);
+      sharedPatchTimerRef.current = null;
+    }
+
+    void loadSharedSnapshot({ initial: true });
+  }, [loadSharedSnapshot, shareId]);
+
+  useEffect(() => {
+    if (!shareId) {
+      return;
+    }
+
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void loadSharedSnapshot({ silent: true });
+      }
+    }, SHARED_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+    };
+  }, [loadSharedSnapshot, shareId]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void loadIssues();
+        void loadSharedSnapshot({ silent: true });
       }
     };
 
@@ -173,7 +627,15 @@ export function App() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadIssues]);
+  }, [loadIssues, loadSharedSnapshot]);
+
+  useEffect(() => {
+    return () => {
+      if (sharedPatchTimerRef.current !== null) {
+        window.clearTimeout(sharedPatchTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (loadState !== "loaded") {
@@ -184,16 +646,23 @@ export function App() {
   }, [loadState, selectedIssueDate]);
 
   useEffect(() => {
-    if (!selectedIssueDate) {
+    if (!selectedIssueDate || !hasIssueContent || !isSharedStateReady) {
       return;
     }
 
     markIssue(selectedIssueDate, true);
-  }, [markIssue, selectedIssueDate]);
+  }, [hasIssueContent, isSharedStateReady, markIssue, selectedIssueDate]);
+
+  const handleRefresh = useCallback(() => {
+    void loadIssues();
+    void loadSharedSnapshot();
+  }, [loadIssues, loadSharedSnapshot]);
 
   const handleSelectIssue = (issue: DailyIssue) => {
     setSelectedDate(issue.date);
-    markIssue(issue.date, true);
+    if (isIssueReadStateKnown) {
+      markIssue(issue.date, true);
+    }
   };
 
   return (
@@ -201,47 +670,67 @@ export function App() {
       <section className="workspace">
         <aside className="issue-rail" aria-label="Recent 10 daily issues">
           <div className="issue-list">
-            {loadState === "loading" && issues.length === 0 ? (
-              <IssueSkeleton />
-            ) : (
-              issues.map((issue) => (
+            {issues.map((issue) => {
+              const isIssueRead = Boolean(readState[issue.date]);
+              const readStateClass = isIssueReadStateKnown
+                ? isIssueRead
+                  ? "read"
+                  : "unread"
+                : "pending";
+
+              return (
                 <button
                   key={issue.date}
                   type="button"
                   className={`issue-row ${
                     selectedIssue?.date === issue.date ? "selected" : ""
-                  } ${readState[issue.date] ? "read" : "unread"}`}
+                  } ${readStateClass}`}
                   onClick={() => handleSelectIssue(issue)}
                 >
                   <span className="issue-date">
                     {formatDate(issue.date)}
                     <small>{formatWeekday(issue.date)}</small>
                   </span>
-                  {!readState[issue.date] ? (
+                  {isIssueReadStateKnown && !isIssueRead ? (
                     <span className="read-dot" aria-label="Unread issue" />
                   ) : null}
                 </button>
-              ))
-            )}
+              );
+            })}
           </div>
         </aside>
 
         <section className="detail-pane" aria-live="polite">
           {loadState === "error" ? (
             <ErrorState message={error} onRetry={loadIssues} />
+          ) : selectedIssue && !hasIssueContent ? (
+            <IssueDetailLoading issue={selectedIssue} />
           ) : selectedIssue ? (
             <IssueDetail
               issue={selectedIssue}
-              isRead={Boolean(readState[selectedIssue.date])}
+              isRead={
+                isIssueReadStateKnown && Boolean(readState[selectedIssue.date])
+              }
+              isSharedStateKnown={isIssueReadStateKnown}
               isLoading={loadState === "loading"}
               summarizedPosts={summarizedPosts}
               codexSettings={codexSettings}
               isCodexSettingsOpen={isCodexSettingsOpen}
-              onRefresh={() => void loadIssues()}
+              isShareDialogOpen={isShareDialogOpen}
+              shareId={shareId}
+              sharedSyncStatus={sharedSyncStatus}
+              sharedSyncError={sharedSyncError}
+              sharedNotice={sharedNotice}
+              isCreatingShare={isCreatingShare}
+              isShareLinkCopied={isShareLinkCopied}
+              onRefresh={handleRefresh}
               onMarkUnread={() => markIssue(selectedIssue.date, false)}
               onMarkPostSummarized={markPostSummarized}
               onCodexSettingsChange={handleCodexSettingsChange}
               onToggleCodexSettings={handleToggleCodexSettings}
+              onToggleShareDialog={handleToggleShareDialog}
+              onShareReadState={() => void handleShareReadState()}
+              onRetrySharedSync={handleRetrySharedSync}
             />
           ) : (
             <EmptyState />
@@ -268,31 +757,54 @@ export function App() {
 interface IssueDetailProps {
   issue: DailyIssue;
   isRead: boolean;
+  isSharedStateKnown: boolean;
   isLoading: boolean;
   summarizedPosts: SummarizedPostState;
   codexSettings: CodexSettings;
   isCodexSettingsOpen: boolean;
+  isShareDialogOpen: boolean;
+  shareId: string | null;
+  sharedSyncStatus: SharedSyncStatus;
+  sharedSyncError: string | null;
+  sharedNotice: string | null;
+  isCreatingShare: boolean;
+  isShareLinkCopied: boolean;
   onRefresh: () => void;
   onMarkUnread: () => void;
   onMarkPostSummarized: (postId: string) => void;
   onCodexSettingsChange: (settings: CodexSettings) => void;
   onToggleCodexSettings: () => void;
+  onToggleShareDialog: () => void;
+  onShareReadState: () => void;
+  onRetrySharedSync: () => void;
 }
 
 function IssueDetail({
   issue,
   isRead,
+  isSharedStateKnown,
   isLoading,
   summarizedPosts,
   codexSettings,
   isCodexSettingsOpen,
+  isShareDialogOpen,
+  shareId,
+  sharedSyncStatus,
+  sharedSyncError,
+  sharedNotice,
+  isCreatingShare,
+  isShareLinkCopied,
   onRefresh,
   onMarkUnread,
   onMarkPostSummarized,
   onCodexSettingsChange,
   onToggleCodexSettings,
+  onToggleShareDialog,
+  onShareReadState,
+  onRetrySharedSync,
 }: IssueDetailProps) {
   const refreshLabel = isLoading ? "Refreshing feed" : "Refresh feed";
+  const shareLabel = shareId ? "Shared progress" : "Share progress";
 
   return (
     <>
@@ -331,6 +843,16 @@ function IssueDetail({
           >
             <Settings size={16} />
           </Button>
+          <Button
+            onClick={onToggleShareDialog}
+            disabled={isCreatingShare}
+            aria-expanded={isShareDialogOpen}
+            aria-controls="shared-state-dialog"
+            aria-label={shareLabel}
+            title={shareLabel}
+          >
+            <Share2 size={16} />
+          </Button>
         </div>
       </div>
 
@@ -341,59 +863,208 @@ function IssueDetail({
         onClose={onToggleCodexSettings}
       />
 
+      <SharedStateDialog
+        isOpen={isShareDialogOpen}
+        shareId={shareId}
+        status={sharedSyncStatus}
+        error={sharedSyncError}
+        notice={sharedNotice}
+        isCreatingShare={isCreatingShare}
+        isShareLinkCopied={isShareLinkCopied}
+        onShare={onShareReadState}
+        onRetry={onRetrySharedSync}
+        onClose={onToggleShareDialog}
+      />
+
       <ol className="post-list">
-        {issue.posts.map((post, index) => (
-          <li
-            className={
-              summarizedPosts[post.id] ? "post-row summarized" : "post-row"
-            }
-            key={post.id}
-          >
-            <span className="post-rank">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            <div className="post-main">
-              <h3>
+        {issue.posts.map((post, index) => {
+          const isPostSummarized =
+            isSharedStateKnown && Boolean(summarizedPosts[post.id]);
+
+          return (
+            <li
+              className={isPostSummarized ? "post-row summarized" : "post-row"}
+              key={post.id}
+            >
+              <span className="post-rank">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <div className="post-main">
+                <h3>
+                  <a
+                    className="post-title-link"
+                    href={post.hnCommentsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open Hacker News comments: ${post.title}`}
+                    title="Open Hacker News comments"
+                  >
+                    {post.title}
+                  </a>
+                </h3>
                 <a
-                  className="post-title-link"
-                  href={post.hnCommentsUrl}
+                  className="post-domain-link"
+                  href={post.originalUrl}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label={`Open Hacker News comments: ${post.title}`}
-                  title="Open Hacker News comments"
+                  aria-label={`Open original article: ${post.title}`}
+                  title="Open original article"
                 >
-                  {post.title}
+                  {getDomain(post.originalUrl)}
                 </a>
-              </h3>
-              <a
-                className="post-domain-link"
-                href={post.originalUrl}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Open original article: ${post.title}`}
-                title="Open original article"
-              >
-                {getDomain(post.originalUrl)}
-              </a>
-            </div>
-            <div className="post-actions">
-              <Button
-                href={buildCodexSummarizeUrl(
-                  post.originalUrl,
-                  post.hnCommentsUrl,
-                  codexSettings,
-                )}
-                title="Summarize with Codex"
-                onClick={() => onMarkPostSummarized(post.id)}
-              >
-                <Sparkles size={16} />
-                Summarize
-              </Button>
-            </div>
-          </li>
-        ))}
+              </div>
+              <div className="post-actions">
+                <Button
+                  href={buildCodexSummarizeUrl(
+                    post.originalUrl,
+                    post.hnCommentsUrl,
+                    codexSettings,
+                  )}
+                  title="Summarize with Codex"
+                  onClick={() => onMarkPostSummarized(post.id)}
+                >
+                  <Sparkles size={16} />
+                  Summarize
+                </Button>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </>
+  );
+}
+
+interface SharedStateDialogProps {
+  isOpen: boolean;
+  shareId: string | null;
+  status: SharedSyncStatus;
+  error: string | null;
+  notice: string | null;
+  isCreatingShare: boolean;
+  isShareLinkCopied: boolean;
+  onShare: () => void;
+  onRetry: () => void;
+  onClose: () => void;
+}
+
+function SharedStateDialog({
+  isOpen,
+  shareId,
+  status,
+  error,
+  notice,
+  isCreatingShare,
+  isShareLinkCopied,
+  onShare,
+  onRetry,
+  onClose,
+}: SharedStateDialogProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const isShared = Boolean(shareId);
+  const actionLabel = isShared
+    ? isShareLinkCopied
+      ? "Copied"
+      : "Copy link"
+    : isCreatingShare
+      ? "Creating"
+      : "Create link";
+  const isActionDisabled = isCreatingShare || (isShared && isShareLinkCopied);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+
+    if (!dialog) {
+      return;
+    }
+
+    if (isOpen && !dialog.open) {
+      dialog.showModal();
+      return;
+    }
+
+    if (!isOpen && dialog.open) {
+      dialog.close();
+    }
+  }, [isOpen]);
+
+  const sharedUrl = shareId ? buildSharedStateUrl(shareId) : null;
+
+  return (
+    <dialog
+      className="settings-dialog shared-state-dialog"
+      id="shared-state-dialog"
+      ref={dialogRef}
+      aria-live="polite"
+      aria-labelledby="shared-state-title"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="settings-dialog-header">
+        <h2 id="shared-state-title">Shared progress</h2>
+        <Button
+          onClick={onClose}
+          aria-label="Close shared progress"
+          title="Close"
+        >
+          <X size={16} />
+        </Button>
+      </div>
+
+      <div className="shared-state-dialog-body">
+        <div className="shared-state-title-row">
+          <h3>
+            {isShared
+              ? "Shared progress is on"
+              : "Share progress across devices"}
+          </h3>
+          {isShared ? (
+            <span className={`shared-state-status ${status}`}>
+              {formatSharedSyncStatus(status)}
+            </span>
+          ) : null}
+        </div>
+        <p>
+          {notice ??
+            (isShared
+              ? "Devices using this URL share read and summary status."
+              : "Create a short link, then open it anywhere to share read and summary status.")}
+        </p>
+        {sharedUrl ? (
+          <input
+            className="shared-state-url-input"
+            type="text"
+            value={sharedUrl}
+            readOnly
+            aria-label="Shared link"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+        ) : null}
+        {error ? <p className="shared-state-error">{error}</p> : null}
+      </div>
+
+      <div className="settings-dialog-footer shared-state-dialog-footer">
+        {error && isShared ? (
+          <Button variant="outline" onClick={onRetry}>
+            <RotateCw size={14} />
+            Retry
+          </Button>
+        ) : null}
+        <Button
+          variant="outline"
+          onClick={onShare}
+          disabled={isActionDisabled}
+          title={isShared ? "Copy shared link" : "Create shared link"}
+        >
+          {isShareLinkCopied ? <Check size={14} /> : <Copy size={14} />}
+          {actionLabel}
+        </Button>
+      </div>
+    </dialog>
   );
 }
 
@@ -543,15 +1214,42 @@ function CodexSettingsDialog({
   );
 }
 
-function IssueSkeleton() {
+interface IssueDetailLoadingProps {
+  issue: DailyIssue;
+}
+
+function IssueDetailLoading({ issue }: IssueDetailLoadingProps) {
   return (
     <>
-      {Array.from({ length: 10 }).map((_, index) => (
-        <div className="issue-row skeleton" key={index}>
-          <span />
-          <span />
+      <div className="detail-header">
+        <div>
+          <time dateTime={issue.date}>{formatHeadingDate(issue.date)}</time>
+          <h2>Hacker News Daily</h2>
         </div>
-      ))}
+
+        <div className="detail-actions">
+          <Button disabled aria-label="Loading feed" title="Loading feed">
+            <RotateCw className="refresh-icon loading" size={16} />
+          </Button>
+        </div>
+      </div>
+
+      <ol className="post-list" aria-label="Loading posts">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <li className="post-row skeleton" key={index}>
+            <span className="post-rank">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div className="post-main">
+              <span className="post-skeleton-line title" />
+              <span className="post-skeleton-line domain" />
+            </div>
+            <div className="post-actions">
+              <span className="post-skeleton-action" />
+            </div>
+          </li>
+        ))}
+      </ol>
     </>
   );
 }
@@ -581,6 +1279,21 @@ function EmptyState() {
       <p>Refresh the feed to load the latest Hacker News Daily entries.</p>
     </div>
   );
+}
+
+function formatSharedSyncStatus(status: SharedSyncStatus) {
+  switch (status) {
+    case "loading":
+      return "Loading";
+    case "syncing":
+      return "Syncing";
+    case "synced":
+      return "Synced";
+    case "error":
+      return "Sync issue";
+    case "local":
+      return "Local";
+  }
 }
 
 function formatDate(date: string) {

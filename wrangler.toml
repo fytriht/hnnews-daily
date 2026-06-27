@@ -1,0 +1,13 @@
+name = "hnnews-daily"
+compatibility_date = "2026-06-27"
+pages_build_output_dir = "dist"
+
+[[kv_namespaces]]
+binding = "SHARED_READ_STATE"
+id = "13ee5201c1e04921874ae6793750400b"
+
+[env.preview]
+
+[[env.preview.kv_namespaces]]
+binding = "SHARED_READ_STATE"
+id = "34a42d331e8549e5aba2651b4fe890e6"

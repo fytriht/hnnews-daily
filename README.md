@@ -20,7 +20,9 @@ Live site: [https://hnnews-daily.pages.dev](https://hnnews-daily.pages.dev)
 - An optional Codex project path can be configured; when blank, the new thread opens without a project path
 - Selecting an issue marks it as read on the current device
 - Read issues can be manually marked as unread
-- Read state, selected issue, and Codex settings are stored in browser `localStorage`
+- A shared link can be created to sync read issues and summarized posts across devices
+- Shared links use a short `?share=<id>` URL; anyone with the URL can update the shared progress
+- Local read state, selected issue, summarized posts, and Codex settings are stored in browser `localStorage`
 - Feed loading errors show a retry action
 
 ## Stack
@@ -29,6 +31,8 @@ Live site: [https://hnnews-daily.pages.dev](https://hnnews-daily.pages.dev)
 - React 19
 - TypeScript
 - Cloudflare Pages Functions
+- Cloudflare KV
+- Wrangler
 - lucide-react icons
 
 ## Data Source
@@ -51,6 +55,27 @@ In production, a Cloudflare Pages Function handles `/hn-daily/index.rss`, fetche
 - Edge cache: 15 minutes
 - Upstream failure response: `502 Unable to load Hacker News Daily feed.`
 
+## Shared Progress
+
+The app can create a shared read-state URL. When a user clicks the share action, the app creates a 10-character base62 id and updates the current URL:
+
+```text
+/?share=<id>
+```
+
+All devices that open the same URL read and write the same Cloudflare KV-backed progress:
+
+- Read daily issues
+- Posts marked as summarized
+
+The shared URL is a read/write bearer link. Do not share it with someone who should not be able to change the progress.
+
+Cloudflare binding name:
+
+```text
+SHARED_READ_STATE
+```
+
 ## Project Structure
 
 ```text
@@ -58,8 +83,13 @@ src/
   App.tsx           Main reader UI and settings dialog
   hnDaily.ts        RSS fetch and parsing
   codex.ts          Codex deep-link URL generation
+  sharedState.ts    Shared read-state API client
   storage.ts        localStorage persistence
 functions/
+  api/
+    shared-state/
+      index.ts      Create shared progress ids
+      [id].ts       Read and patch shared progress
   hn-daily/
     index.rss.ts    Cloudflare Pages Function RSS proxy
 ```
@@ -77,11 +107,18 @@ Default local URL:
 http://127.0.0.1:5173/
 ```
 
+To test Cloudflare Pages Functions and the local KV binding:
+
+```bash
+npm run dev:pages
+```
+
 ## Commands
 
 | Command                       | Description                                               |
 |-------------------------------|-----------------------------------------------------------|
 | `npm run dev`                 | Start the Vite dev server                                 |
+| `npm run dev:pages`           | Build and run Cloudflare Pages locally with KV            |
 | `npm run build`               | Type-check frontend and function code, then build the app |
 | `npm run typecheck:functions` | Type-check Cloudflare Pages Functions only                |
 | `npm run lint`                | Run ESLint                                                |
@@ -96,5 +133,12 @@ The app is deployed on Cloudflare Pages:
 - Build command: `npm run build`
 - Output directory: `dist`
 - Production branch: `main`
+
+Create a KV namespace and bind it to the Pages project before deploying shared progress:
+
+1. Create a Cloudflare KV namespace.
+2. In the Cloudflare Pages project, add a KV binding for both Production and Preview environments.
+3. Set the binding variable name to `SHARED_READ_STATE`.
+4. Redeploy the Pages project.
 
 Pushing to `main` triggers an automatic Cloudflare Pages deployment.
