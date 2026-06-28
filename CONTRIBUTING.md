@@ -102,7 +102,7 @@ AI summaries use:
 functions/api/summarize-post.ts
 ```
 
-The summary endpoint accepts only `{ postId, promptTemplate }` from the browser and returns `text/event-stream`, including cached responses. The server resolves the canonical post title and URLs from Hacker News Daily before calling OpenRouter or computing the cache key. It uses OpenRouter model `deepseek/deepseek-v4-flash`, stores successful summaries under a separate KV prefix, and rate-limits cache misses by client IP.
+The summary endpoint accepts only `{ postId, promptTemplate }` from the browser and returns `text/event-stream`, including cached responses. Cached summaries are keyed by `postId`, model, prompt version, and normalized prompt template. On cache misses, the server resolves the canonical post title and URLs from Hacker News Daily before calling OpenRouter. It uses OpenRouter model `deepseek/deepseek-v4-flash`, stores successful summaries under a separate KV prefix, and rate-limits cache misses by client IP.
 
 The shared URL is a read/write bearer link. Anyone with the URL can update the shared progress, so avoid logging or sharing these URLs unintentionally during development.
 

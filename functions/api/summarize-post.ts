@@ -81,6 +81,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const payload = payloadResult.value;
+  const normalizedPromptTemplate = normalizePromptTemplate(
+    payload.promptTemplate,
+  );
+  const cacheKey = await createSummaryCacheKey(
+    payload.postId,
+    normalizedPromptTemplate,
+  );
+  const cached = await readCachedSummary(env.SHARED_READ_STATE, cacheKey);
+
+  if (cached) {
+    return createCachedSummaryStream(cached, request.signal);
+  }
+
   const canonicalPostResult = await readCanonicalPost(payload.postId);
   if (!canonicalPostResult.ok) {
     return createErrorStream(
@@ -90,23 +103,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const canonicalPost = canonicalPostResult.value;
-  const normalizedPromptTemplate = normalizePromptTemplate(
-    payload.promptTemplate,
-  );
   const renderedPrompt = renderPromptTemplate(
     normalizedPromptTemplate,
     canonicalPost,
   );
   const prompt = buildOpenRouterPrompt(canonicalPost, renderedPrompt);
-  const cacheKey = await createSummaryCacheKey(
-    canonicalPost,
-    normalizedPromptTemplate,
-  );
-  const cached = await readCachedSummary(env.SHARED_READ_STATE, cacheKey);
-
-  if (cached) {
-    return createCachedSummaryStream(cached, request.signal);
-  }
 
   if (!env.OPENROUTER_API_KEY) {
     return createErrorStream("OpenRouter API key is not configured.", 500);
@@ -229,17 +230,14 @@ function buildOpenRouterPrompt(
 }
 
 async function createSummaryCacheKey(
-  payload: Record<"postId" | "title" | "originalUrl" | "hnCommentsUrl", string>,
+  postId: string,
   normalizedPromptTemplate: string,
 ) {
   const digest = await sha256Hex(
     JSON.stringify({
       model: MODEL,
       promptVersion: SUMMARY_PROMPT_VERSION,
-      postId: payload.postId,
-      title: payload.title,
-      originalUrl: payload.originalUrl,
-      hnCommentsUrl: payload.hnCommentsUrl,
+      postId,
       promptTemplate: normalizedPromptTemplate,
     }),
   );

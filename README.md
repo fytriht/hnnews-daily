@@ -45,7 +45,7 @@ Request body:
 }
 ```
 
-The server treats `postId` as the only trusted post identifier. It resolves the canonical title, article URL, and Hacker News comments URL from Hacker News Daily before building the OpenRouter prompt and cache key.
+The server treats `postId` as the only trusted post identifier. Cached summaries are keyed by `postId`, model, prompt version, and normalized prompt template. On cache misses, the server resolves the canonical title, article URL, and Hacker News comments URL from Hacker News Daily before building the OpenRouter prompt.
 
 The endpoint streams Server-Sent Events:
 
