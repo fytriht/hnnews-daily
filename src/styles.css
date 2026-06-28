@@ -631,6 +631,99 @@ a {
   gap: 6px;
 }
 
+.summary-loading-icon {
+  animation: refresh-spin 1s linear infinite;
+}
+
+.post-summary-panel {
+  display: grid;
+  grid-column: 2 / -1;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 4px;
+  padding: 13px 14px;
+  border: 1px solid #dde9f6;
+  border-left: 3px solid var(--focus);
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.post-summary-panel.error {
+  border-color: #f4c6c1;
+  border-left-color: #b42318;
+  background: #fff8f7;
+}
+
+.post-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.post-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.2;
+}
+
+.post-summary-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: #235c8f;
+  background: #e3f1ff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.post-summary-status.done {
+  color: #177245;
+  background: #e5f6ec;
+}
+
+.post-summary-status.error {
+  color: #b42318;
+  background: #fde8e5;
+}
+
+.post-summary-text,
+.post-summary-placeholder {
+  color: #2f3947;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.post-summary-placeholder {
+  color: var(--muted);
+}
+
+.post-summary-error-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.post-summary-error-row p {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .post-skeleton-line,
 .post-skeleton-action {
   display: block;
@@ -704,7 +797,8 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .refresh-icon.loading {
+  .refresh-icon.loading,
+  .summary-loading-icon {
     animation: none;
   }
 }
@@ -827,5 +921,15 @@ textarea:focus-visible,
   .post-actions {
     grid-column: 2;
     justify-content: flex-start;
+  }
+
+  .post-summary-panel {
+    grid-column: 1 / -1;
+  }
+
+  .post-summary-header,
+  .post-summary-error-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

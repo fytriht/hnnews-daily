@@ -11,14 +11,17 @@ import {
   Copy,
   Github,
   Info,
+  LoaderCircle,
   Mail,
   MailOpen,
   RotateCw,
   RotateCcw,
   Settings,
   Share2,
+  Sparkles,
   X,
 } from "lucide-react";
+import { streamPostSummary, type SummaryMeta } from "./aiSummary";
 import { Button } from "./Button";
 import {
   buildCodexSummarizeUrl,
@@ -49,7 +52,12 @@ import {
   writeStoredSharedStateSnapshot,
   writeStoredSummarizedPosts,
 } from "./storage";
-import type { DailyIssue, ReadState, SummarizedPostState } from "./types";
+import type {
+  DailyIssue,
+  HnPost,
+  ReadState,
+  SummarizedPostState,
+} from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -782,6 +790,15 @@ interface IssueDetailProps {
   onRetrySharedSync: () => void;
 }
 
+type PostSummaryStatus = "loading" | "streaming" | "done" | "error";
+
+interface PostSummaryState {
+  status: PostSummaryStatus;
+  text: string;
+  error: string | null;
+  meta: SummaryMeta | null;
+}
+
 function IssueDetail({
   issue,
   isRead,
@@ -806,6 +823,12 @@ function IssueDetail({
   onShareReadState,
   onRetrySharedSync,
 }: IssueDetailProps) {
+  const [postSummaryStates, setPostSummaryStates] = useState<
+    Record<string, PostSummaryState>
+  >({});
+  const postSummaryAbortControllersRef = useRef<
+    Record<string, AbortController>
+  >({});
   const refreshLabel = isLoading ? "Refreshing feed" : "Refresh feed";
   const readToggleLabel = !isSharedStateKnown
     ? "Read status loading"
@@ -818,6 +841,121 @@ function IssueDetail({
       ? "Mark unread"
       : "Mark read";
   const shareLabel = shareId ? "Shared progress" : "Share progress";
+  const summarizePost = useCallback(
+    async (post: HnPost) => {
+      postSummaryAbortControllersRef.current[post.id]?.abort();
+
+      const abortController = new AbortController();
+      let summaryText = "";
+
+      postSummaryAbortControllersRef.current[post.id] = abortController;
+      setPostSummaryStates((current) => ({
+        ...current,
+        [post.id]: {
+          status: "loading",
+          text: "",
+          error: null,
+          meta: null,
+        },
+      }));
+
+      try {
+        await streamPostSummary(
+          post,
+          codexSettings.promptTemplate,
+          {
+            onMeta: (meta) => {
+              setPostSummaryStates((current) => ({
+                ...current,
+                [post.id]: {
+                  ...(current[post.id] ?? {
+                    text: "",
+                    error: null,
+                  }),
+                  status: "streaming",
+                  meta,
+                },
+              }));
+            },
+            onDelta: (text) => {
+              summaryText += text;
+              setPostSummaryStates((current) => {
+                const previous = current[post.id];
+
+                return {
+                  ...current,
+                  [post.id]: {
+                    status: previous?.status ?? "streaming",
+                    text: `${previous?.text ?? ""}${text}`,
+                    error: null,
+                    meta: previous?.meta ?? null,
+                  },
+                };
+              });
+            },
+            onDone: () => {
+              setPostSummaryStates((current) => {
+                const previous = current[post.id];
+
+                return {
+                  ...current,
+                  [post.id]: {
+                    status: "done",
+                    text: previous?.text ?? summaryText,
+                    error: null,
+                    meta: previous?.meta ?? null,
+                  },
+                };
+              });
+            },
+          },
+          abortController.signal,
+        );
+
+        if (summaryText.trim()) {
+          onMarkPostSummarized(post.id);
+        }
+      } catch (summaryError) {
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setPostSummaryStates((current) => {
+          const previous = current[post.id];
+
+          return {
+            ...current,
+            [post.id]: {
+              status: "error",
+              text: previous?.text ?? summaryText,
+              error:
+                summaryError instanceof Error
+                  ? summaryError.message
+                  : "Unable to summarize this post.",
+              meta: previous?.meta ?? null,
+            },
+          };
+        });
+      } finally {
+        if (
+          postSummaryAbortControllersRef.current[post.id] === abortController
+        ) {
+          delete postSummaryAbortControllersRef.current[post.id];
+        }
+      }
+    },
+    [codexSettings.promptTemplate, onMarkPostSummarized],
+  );
+
+  useEffect(() => {
+    const abortControllers = postSummaryAbortControllersRef.current;
+
+    return () => {
+      Object.values(abortControllers).forEach((abortController) =>
+        abortController.abort(),
+      );
+    };
+  }, []);
 
   return (
     <>
@@ -894,6 +1032,11 @@ function IssueDetail({
         {issue.posts.map((post, index) => {
           const isPostSummarized =
             isSharedStateKnown && Boolean(summarizedPosts[post.id]);
+          const summaryState = postSummaryStates[post.id];
+          const isSummaryLoading =
+            summaryState?.status === "loading" ||
+            summaryState?.status === "streaming";
+          const summaryPanelId = `post-summary-${post.id}`;
 
           return (
             <li
@@ -934,6 +1077,7 @@ function IssueDetail({
                     post.originalUrl,
                     post.hnCommentsUrl,
                     codexSettings,
+                    post.title,
                   )}
                   aria-label="Open in Codex"
                   title="Open in Codex"
@@ -941,12 +1085,88 @@ function IssueDetail({
                 >
                   <span className="codex-button-icon" aria-hidden="true" />
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void summarizePost(post)}
+                  disabled={isSummaryLoading}
+                  aria-expanded={Boolean(summaryState)}
+                  aria-controls={summaryPanelId}
+                  aria-label={`Summarize with AI: ${post.title}`}
+                  title="AI summary"
+                >
+                  {isSummaryLoading ? (
+                    <LoaderCircle className="summary-loading-icon" size={14} />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  AI 总结
+                </Button>
               </div>
+              {summaryState ? (
+                <PostSummaryPanel
+                  id={summaryPanelId}
+                  state={summaryState}
+                  onRetry={() => void summarizePost(post)}
+                />
+              ) : null}
             </li>
           );
         })}
       </ol>
     </>
+  );
+}
+
+interface PostSummaryPanelProps {
+  id: string;
+  state: PostSummaryState;
+  onRetry: () => void;
+}
+
+function PostSummaryPanel({ id, state, onRetry }: PostSummaryPanelProps) {
+  const statusLabel =
+    state.status === "error"
+      ? "Needs retry"
+      : state.status === "done"
+        ? state.meta?.cached
+          ? "Cached"
+          : "Done"
+        : "Writing";
+
+  return (
+    <div
+      className={`post-summary-panel ${state.status}`}
+      id={id}
+      aria-live="polite"
+    >
+      <div className="post-summary-header">
+        <span className="post-summary-title">
+          <Sparkles size={14} aria-hidden="true" />
+          AI Summary
+        </span>
+        <span className={`post-summary-status ${state.status}`}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {state.text ? (
+        <div className="post-summary-text">{state.text}</div>
+      ) : state.status === "error" ? null : (
+        <div className="post-summary-placeholder">
+          Reading article and HN comments...
+        </div>
+      )}
+
+      {state.error ? (
+        <div className="post-summary-error-row">
+          <p>{state.error}</p>
+          <Button variant="outline" onClick={onRetry}>
+            <RotateCw size={14} />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

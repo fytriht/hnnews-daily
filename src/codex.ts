@@ -10,12 +10,18 @@ export function buildCodexSummarizeUrl(
   originalUrl: string,
   hnCommentsUrl: string,
   settings: CodexSettings,
+  title = "",
 ) {
   const promptTemplate = settings.promptTemplate.trim()
     ? settings.promptTemplate
     : DEFAULT_CODEX_PROMPT_TEMPLATE;
   const params = new URLSearchParams({
-    prompt: renderPromptTemplate(promptTemplate, originalUrl, hnCommentsUrl),
+    prompt: renderPromptTemplate(
+      promptTemplate,
+      originalUrl,
+      hnCommentsUrl,
+      title,
+    ),
   });
   const projectPath = settings.projectPath.trim();
 
@@ -30,8 +36,11 @@ function renderPromptTemplate(
   template: string,
   originalUrl: string,
   hnCommentsUrl: string,
+  title: string,
 ) {
   return template
+    .split("{title}")
+    .join(title)
     .split("{originalUrl}")
     .join(originalUrl)
     .split("{hnCommentsUrl}")
