@@ -22,6 +22,8 @@ import {
   Share2,
   X,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { streamPostSummary, type SummaryMeta } from "./aiSummary";
 import { Button } from "./Button";
 import {
@@ -1203,7 +1205,52 @@ function PostSummaryPanel({
       </div>
 
       {state.text ? (
-        <div className="post-summary-text">{state.text}</div>
+        <div className="post-summary-text">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            allowedElements={[
+              "a",
+              "blockquote",
+              "br",
+              "code",
+              "del",
+              "em",
+              "h1",
+              "h2",
+              "h3",
+              "h4",
+              "hr",
+              "li",
+              "ol",
+              "p",
+              "pre",
+              "strong",
+              "table",
+              "tbody",
+              "td",
+              "th",
+              "thead",
+              "tr",
+              "ul",
+            ]}
+            urlTransform={(url) => {
+              if (/^(https?:|mailto:)/i.test(url)) {
+                return url;
+              }
+
+              return "";
+            }}
+            components={{
+              a: ({ children, href }) => (
+                <a href={href} target="_blank" rel="noreferrer">
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {state.text}
+          </ReactMarkdown>
+        </div>
       ) : state.status === "error" ? null : (
         <div className="post-summary-placeholder">
           Reading the article and HN comments...
