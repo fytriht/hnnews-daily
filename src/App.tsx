@@ -7,6 +7,8 @@ import {
   type MutableRefObject,
 } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   Check,
   Copy,
   Github,
@@ -18,7 +20,6 @@ import {
   RotateCcw,
   Settings,
   Share2,
-  Sparkles,
   X,
 } from "lucide-react";
 import { streamPostSummary, type SummaryMeta } from "./aiSummary";
@@ -797,6 +798,7 @@ interface PostSummaryState {
   text: string;
   error: string | null;
   meta: SummaryMeta | null;
+  isExpanded: boolean;
 }
 
 function IssueDetail({
@@ -841,6 +843,23 @@ function IssueDetail({
       ? "Mark unread"
       : "Mark read";
   const shareLabel = shareId ? "Shared progress" : "Share progress";
+  const togglePostSummary = useCallback((postId: string) => {
+    setPostSummaryStates((current) => {
+      const summaryState = current[postId];
+
+      if (!summaryState) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [postId]: {
+          ...summaryState,
+          isExpanded: !summaryState.isExpanded,
+        },
+      };
+    });
+  }, []);
   const summarizePost = useCallback(
     async (post: HnPost) => {
       postSummaryAbortControllersRef.current[post.id]?.abort();
@@ -856,6 +875,7 @@ function IssueDetail({
           text: "",
           error: null,
           meta: null,
+          isExpanded: true,
         },
       }));
 
@@ -871,6 +891,7 @@ function IssueDetail({
                   ...(current[post.id] ?? {
                     text: "",
                     error: null,
+                    isExpanded: true,
                   }),
                   status: "streaming",
                   meta,
@@ -889,6 +910,7 @@ function IssueDetail({
                     text: `${previous?.text ?? ""}${text}`,
                     error: null,
                     meta: previous?.meta ?? null,
+                    isExpanded: previous?.isExpanded ?? true,
                   },
                 };
               });
@@ -904,6 +926,7 @@ function IssueDetail({
                     text: previous?.text ?? summaryText,
                     error: null,
                     meta: previous?.meta ?? null,
+                    isExpanded: true,
                   },
                 };
               });
@@ -933,6 +956,7 @@ function IssueDetail({
                   ? summaryError.message
                   : "Unable to summarize this post.",
               meta: previous?.meta ?? null,
+              isExpanded: true,
             },
           };
         });
@@ -1036,7 +1060,35 @@ function IssueDetail({
           const isSummaryLoading =
             summaryState?.status === "loading" ||
             summaryState?.status === "streaming";
+          const hasSummaryResult =
+            summaryState?.status === "done" && summaryState.text.trim();
           const summaryPanelId = `post-summary-${post.id}`;
+          const summaryButtonTitle = isSummaryLoading
+            ? "Summarizing"
+            : hasSummaryResult
+              ? summaryState.isExpanded
+                ? "Collapse AI Summary"
+                : "Expand AI Summary"
+              : summaryState?.status === "error"
+                ? "Retry AI Summary"
+                : "AI Summary";
+          const summaryButtonLabel = isSummaryLoading
+            ? `Summarizing with AI: ${post.title}`
+            : hasSummaryResult
+              ? summaryState.isExpanded
+                ? `Collapse AI Summary: ${post.title}`
+                : `Expand AI Summary: ${post.title}`
+              : summaryState?.status === "error"
+                ? `Retry AI Summary: ${post.title}`
+                : `Generate AI Summary: ${post.title}`;
+          const handleSummaryButtonClick = () => {
+            if (hasSummaryResult) {
+              togglePostSummary(post.id);
+              return;
+            }
+
+            void summarizePost(post);
+          };
 
           return (
             <li
@@ -1087,22 +1139,26 @@ function IssueDetail({
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => void summarizePost(post)}
+                  className="summary-button"
+                  onClick={handleSummaryButtonClick}
                   disabled={isSummaryLoading}
-                  aria-expanded={Boolean(summaryState)}
+                  aria-busy={isSummaryLoading || undefined}
+                  aria-expanded={summaryState?.isExpanded ?? false}
                   aria-controls={summaryPanelId}
-                  aria-label={`Summarize with AI: ${post.title}`}
-                  title="AI summary"
+                  aria-label={summaryButtonLabel}
+                  title={summaryButtonTitle}
                 >
                   {isSummaryLoading ? (
                     <LoaderCircle className="summary-loading-icon" size={14} />
+                  ) : hasSummaryResult && summaryState.isExpanded ? (
+                    <ChevronUp size={14} />
                   ) : (
-                    <Sparkles size={14} />
+                    <ChevronDown size={14} />
                   )}
-                  AI 总结
+                  AI Summary
                 </Button>
               </div>
-              {summaryState ? (
+              {summaryState?.isExpanded ? (
                 <PostSummaryPanel
                   id={summaryPanelId}
                   state={summaryState}
@@ -1123,16 +1179,11 @@ interface PostSummaryPanelProps {
   onRetry: () => void;
 }
 
-function PostSummaryPanel({ id, state, onRetry }: PostSummaryPanelProps) {
-  const statusLabel =
-    state.status === "error"
-      ? "Needs retry"
-      : state.status === "done"
-        ? state.meta?.cached
-          ? "Cached"
-          : "Done"
-        : "Writing";
-
+function PostSummaryPanel({
+  id,
+  state,
+  onRetry,
+}: PostSummaryPanelProps) {
   return (
     <div
       className={`post-summary-panel ${state.status}`}
@@ -1140,20 +1191,14 @@ function PostSummaryPanel({ id, state, onRetry }: PostSummaryPanelProps) {
       aria-live="polite"
     >
       <div className="post-summary-header">
-        <span className="post-summary-title">
-          <Sparkles size={14} aria-hidden="true" />
-          AI Summary
-        </span>
-        <span className={`post-summary-status ${state.status}`}>
-          {statusLabel}
-        </span>
+        <span className="post-summary-title">AI Summary</span>
       </div>
 
       {state.text ? (
         <div className="post-summary-text">{state.text}</div>
       ) : state.status === "error" ? null : (
         <div className="post-summary-placeholder">
-          Reading article and HN comments...
+          正在读取文章和 HN 评论...
         </div>
       )}
 
@@ -1162,7 +1207,7 @@ function PostSummaryPanel({ id, state, onRetry }: PostSummaryPanelProps) {
           <p>{state.error}</p>
           <Button variant="outline" onClick={onRetry}>
             <RotateCw size={14} />
-            Retry
+            重试
           </Button>
         </div>
       ) : null}
