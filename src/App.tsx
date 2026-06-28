@@ -1159,14 +1159,9 @@ function IssueDetail({
                   AI Summary
                 </Button>
               </div>
-              {summaryState ? (
+              {summaryState?.isExpanded ? (
                 <div
-                  className={
-                    summaryState.isExpanded
-                      ? "post-summary-slot expanded"
-                      : "post-summary-slot"
-                  }
-                  aria-hidden={!summaryState.isExpanded}
+                  className="post-summary-slot expanded"
                 >
                   <PostSummaryPanel
                     id={summaryPanelId}
