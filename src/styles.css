@@ -608,11 +608,20 @@ a {
   color: var(--focus);
 }
 
-.post-domain-link {
-  display: block;
-  width: fit-content;
+.post-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 4px;
   max-width: 100%;
   margin-top: 5px;
+}
+
+.post-meta-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: min(100%, 32rem);
   overflow: hidden;
   color: var(--muted);
   font-size: 13px;
@@ -622,7 +631,7 @@ a {
   transition: color 160ms ease;
 }
 
-.post-domain-link:hover {
+.post-meta-link:hover {
   color: var(--focus);
 }
 

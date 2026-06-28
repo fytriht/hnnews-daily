@@ -1155,16 +1155,28 @@ function IssueDetail({
                     {post.title}
                   </a>
                 </h3>
-                <a
-                  className="post-domain-link"
-                  href={post.originalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Open original article: ${post.title}`}
-                  title="Open original article"
-                >
-                  {getDomain(post.originalUrl)}
-                </a>
+                <div className="post-links">
+                  <a
+                    className="post-meta-link"
+                    href={post.originalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open original article: ${post.title}`}
+                    title="Open original article"
+                  >
+                    {getDomain(post.originalUrl)}
+                  </a>
+                  <a
+                    className="post-meta-link"
+                    href={post.hnCommentsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open Hacker News comments: ${post.title}`}
+                    title="Open Hacker News comments"
+                  >
+                    (comments)
+                  </a>
+                </div>
               </div>
               <div className="post-actions">
                 <Button
