@@ -45,40 +45,69 @@ export async function streamPostSummary(
     throw new Error(await readNonStreamError(response));
   }
 
-  await readSummaryStream(response.body, handlers);
+  await readSummaryStream(response.body, handlers, signal);
 }
 
 async function readSummaryStream(
   body: ReadableStream<Uint8Array>,
   handlers: SummaryStreamHandlers,
+  signal: AbortSignal,
 ) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let didFinish = false;
+  const cancelReader = () => {
+    void reader.cancel().catch(() => undefined);
+  };
 
-  while (true) {
-    const { done, value } = await reader.read();
+  if (signal.aborted) {
+    await reader.cancel();
+    throw new DOMException("Summary generation stopped.", "AbortError");
+  }
 
-    if (done) {
-      break;
+  signal.addEventListener("abort", cancelReader, { once: true });
+
+  try {
+    while (true) {
+      if (signal.aborted) {
+        throw new DOMException("Summary generation stopped.", "AbortError");
+      }
+
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const messages = splitSseMessages(buffer);
+      buffer = messages.remainder;
+
+      for (const message of messages.complete) {
+        if (handleSummaryEvent(parseSseMessage(message), handlers)) {
+          didFinish = true;
+        }
+      }
     }
 
-    buffer += decoder.decode(value, { stream: true });
-    const messages = splitSseMessages(buffer);
-    buffer = messages.remainder;
+    if (signal.aborted) {
+      throw new DOMException("Summary generation stopped.", "AbortError");
+    }
 
-    for (const message of messages.complete) {
-      if (handleSummaryEvent(parseSseMessage(message), handlers)) {
+    if (buffer.trim()) {
+      if (handleSummaryEvent(parseSseMessage(buffer), handlers)) {
         didFinish = true;
       }
     }
-  }
-
-  if (buffer.trim()) {
-    if (handleSummaryEvent(parseSseMessage(buffer), handlers)) {
-      didFinish = true;
+  } catch (error) {
+    if (signal.aborted) {
+      throw new DOMException("Summary generation stopped.", "AbortError");
     }
+
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", cancelReader);
   }
 
   if (!didFinish) {

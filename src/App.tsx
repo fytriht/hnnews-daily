@@ -10,10 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
+  CircleStop,
   Copy,
   Github,
   Info,
-  LoaderCircle,
   Mail,
   MailOpen,
   RotateCw,
@@ -793,7 +793,12 @@ interface IssueDetailProps {
   onRetrySharedSync: () => void;
 }
 
-type PostSummaryStatus = "loading" | "streaming" | "done" | "error";
+type PostSummaryStatus =
+  | "loading"
+  | "streaming"
+  | "done"
+  | "error"
+  | "stopped";
 
 interface PostSummaryState {
   status: PostSummaryStatus;
@@ -972,6 +977,37 @@ function IssueDetail({
     },
     [codexSettings.promptTemplate, onMarkPostSummarized],
   );
+  const stopPostSummary = useCallback((postId: string) => {
+    const abortController = postSummaryAbortControllersRef.current[postId];
+
+    if (!abortController) {
+      return;
+    }
+
+    abortController.abort();
+    delete postSummaryAbortControllersRef.current[postId];
+    setPostSummaryStates((current) => {
+      const previous = current[postId];
+
+      if (
+        !previous ||
+        (previous.status !== "loading" && previous.status !== "streaming")
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [postId]: {
+          status: "stopped",
+          text: previous.text,
+          error: null,
+          meta: previous.meta,
+          isExpanded: true,
+        },
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const abortControllers = postSummaryAbortControllersRef.current;
@@ -1066,23 +1102,30 @@ function IssueDetail({
             summaryState?.status === "done" &&
             Boolean(summaryState.text.trim());
           const canToggleSummary =
-            hasSummaryResult || summaryState?.status === "error";
+            hasSummaryResult ||
+            summaryState?.status === "error" ||
+            summaryState?.status === "stopped";
           const summaryPanelId = `post-summary-${post.id}`;
           const summaryButtonTitle = isSummaryLoading
-            ? "Summarizing"
+            ? "Stop AI Summary"
             : canToggleSummary
               ? summaryState.isExpanded
                 ? "Collapse AI Summary"
                 : "Expand AI Summary"
               : "AI Summary";
           const summaryButtonLabel = isSummaryLoading
-            ? `Summarizing with AI: ${post.title}`
+            ? `Stop AI Summary: ${post.title}`
             : canToggleSummary
               ? summaryState.isExpanded
                 ? `Collapse AI Summary: ${post.title}`
                 : `Expand AI Summary: ${post.title}`
               : `Generate AI Summary: ${post.title}`;
           const handleSummaryButtonClick = () => {
+            if (isSummaryLoading) {
+              stopPostSummary(post.id);
+              return;
+            }
+
             if (canToggleSummary) {
               togglePostSummary(post.id);
               return;
@@ -1142,7 +1185,6 @@ function IssueDetail({
                   variant="outline"
                   className="summary-button"
                   onClick={handleSummaryButtonClick}
-                  disabled={isSummaryLoading}
                   aria-busy={isSummaryLoading || undefined}
                   aria-expanded={summaryState?.isExpanded ?? false}
                   aria-controls={summaryPanelId}
@@ -1150,19 +1192,17 @@ function IssueDetail({
                   title={summaryButtonTitle}
                 >
                   {isSummaryLoading ? (
-                    <LoaderCircle className="summary-loading-icon" size={14} />
+                    <CircleStop size={14} />
                   ) : canToggleSummary && summaryState.isExpanded ? (
                     <ChevronUp size={14} />
                   ) : (
                     <ChevronDown size={14} />
                   )}
-                  AI Summary
+                  {isSummaryLoading ? "Stop" : "AI Summary"}
                 </Button>
               </div>
               {summaryState?.isExpanded ? (
-                <div
-                  className="post-summary-slot expanded"
-                >
+                <div className="post-summary-slot expanded">
                   <PostSummaryPanel
                     id={summaryPanelId}
                     state={summaryState}
@@ -1189,6 +1229,10 @@ function PostSummaryPanel({
   state,
   onRetry,
 }: PostSummaryPanelProps) {
+  const isGenerating =
+    state.status === "loading" || state.status === "streaming";
+  const isStopped = state.status === "stopped";
+
   return (
     <div
       className={`post-summary-panel ${state.status}`}
@@ -1244,12 +1288,38 @@ function PostSummaryPanel({
         </div>
       ) : state.status === "error" ? null : (
         <div className="post-summary-placeholder">
-          Reading the article and HN comments...
+          {isStopped
+            ? "Summary generation stopped."
+            : "Reading the article and HN comments..."}
         </div>
       )}
 
+      {isGenerating ? (
+        <div className="post-summary-action-row">
+          <p>
+            {state.status === "loading"
+              ? "Starting summary generation..."
+              : "Generating summary..."}
+          </p>
+        </div>
+      ) : null}
+
+      {isStopped ? (
+        <div className="post-summary-action-row">
+          <p>
+            {state.text
+              ? "Stopped before the summary finished."
+              : "No summary was generated."}
+          </p>
+          <Button variant="outline" onClick={onRetry}>
+            <RotateCw size={14} />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
       {state.error ? (
-        <div className="post-summary-error-row">
+        <div className="post-summary-action-row error">
           <p>{state.error}</p>
           <Button variant="outline" onClick={onRetry}>
             <RotateCw size={14} />

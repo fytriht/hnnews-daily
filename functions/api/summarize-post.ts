@@ -569,7 +569,7 @@ function createCachedSummaryStream(cached: CachedSummary, signal: AbortSignal) {
       model: cached.model,
     });
 
-    await wait(CACHED_STREAM_INITIAL_DELAY_MS);
+    await wait(CACHED_STREAM_INITIAL_DELAY_MS, signal);
 
     const chunks = chunkText(cached.summary);
 
@@ -583,7 +583,7 @@ function createCachedSummaryStream(cached: CachedSummary, signal: AbortSignal) {
       enqueueEvent(controller, "delta", { text: chunk });
 
       if (index < chunks.length - 1) {
-        await wait(readCachedStreamDelay(chunk));
+        await wait(readCachedStreamDelay(chunk), signal);
       }
     }
 
@@ -609,42 +609,58 @@ function createOpenRouterSummaryStream({
 }) {
   return createEventStream(async (controller) => {
     const generatedAt = new Date().toISOString();
-    const response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
-      method: "POST",
-      headers: {
-        Accept: "text/event-stream",
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": origin,
-        "X-Title": "Hacker News Daily",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        stream: true,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You summarize Hacker News posts. Fetch and read the provided article URL and Hacker News comments URL before answering. Follow the user's prompt.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        tools: [
-          {
-            type: "openrouter:web_fetch",
-            parameters: {
-              max_uses: 4,
-              max_content_tokens: 100000,
-              blocked_domains: ["localhost", "127.0.0.1", "0.0.0.0", "::1"],
+    let response: Response;
+
+    try {
+      response = await fetch(OPENROUTER_CHAT_COMPLETIONS_URL, {
+        method: "POST",
+        headers: {
+          Accept: "text/event-stream",
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": origin,
+          "X-Title": "Hacker News Daily",
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          stream: true,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You summarize Hacker News posts. Fetch and read the provided article URL and Hacker News comments URL before answering. Follow the user's prompt.",
             },
-          },
-        ],
-      }),
-      signal,
-    });
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          tools: [
+            {
+              type: "openrouter:web_fetch",
+              parameters: {
+                max_uses: 4,
+                max_content_tokens: 100000,
+                blocked_domains: ["localhost", "127.0.0.1", "0.0.0.0", "::1"],
+              },
+            },
+          ],
+        }),
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted || isAbortError(error)) {
+        closeEventStream(controller);
+        return;
+      }
+
+      throw error;
+    }
+
+    if (signal.aborted) {
+      closeEventStream(controller);
+      return;
+    }
 
     if (!response.ok || !response.body) {
       enqueueEvent(controller, "error", {
@@ -666,36 +682,57 @@ function createOpenRouterSummaryStream({
     let summary = "";
     let streamDone = false;
 
-    while (!streamDone) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const messages = splitSseMessages(buffer);
-      buffer = messages.remainder;
-
-      for (const message of messages.complete) {
-        const chunkResult = readOpenRouterStreamMessage(message);
-
-        if (chunkResult.type === "done") {
-          streamDone = true;
-          break;
-        }
-
-        if (chunkResult.type === "error") {
-          enqueueEvent(controller, "error", { message: chunkResult.message });
-          controller.close();
+    try {
+      while (!streamDone) {
+        if (signal.aborted) {
+          await reader.cancel();
+          closeEventStream(controller);
           return;
         }
 
-        if (chunkResult.text) {
-          summary += chunkResult.text;
-          enqueueEvent(controller, "delta", { text: chunkResult.text });
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const messages = splitSseMessages(buffer);
+        buffer = messages.remainder;
+
+        for (const message of messages.complete) {
+          const chunkResult = readOpenRouterStreamMessage(message);
+
+          if (chunkResult.type === "done") {
+            streamDone = true;
+            break;
+          }
+
+          if (chunkResult.type === "error") {
+            enqueueEvent(controller, "error", { message: chunkResult.message });
+            controller.close();
+            return;
+          }
+
+          if (chunkResult.text) {
+            summary += chunkResult.text;
+            enqueueEvent(controller, "delta", { text: chunkResult.text });
+          }
         }
       }
+    } catch (error) {
+      if (signal.aborted || isAbortError(error)) {
+        await reader.cancel().catch(() => undefined);
+        closeEventStream(controller);
+        return;
+      }
+
+      throw error;
+    }
+
+    if (signal.aborted) {
+      closeEventStream(controller);
+      return;
     }
 
     if (!streamDone && buffer.trim()) {
@@ -716,6 +753,12 @@ function createOpenRouterSummaryStream({
     }
 
     const trimmedSummary = summary.trim();
+
+    if (signal.aborted) {
+      closeEventStream(controller);
+      return;
+    }
+
     if (!trimmedSummary) {
       enqueueEvent(controller, "error", {
         message: "OpenRouter returned an empty summary.",
@@ -839,13 +882,24 @@ function createEventStream(
         try {
           await start(controller);
         } catch (error) {
-          enqueueEvent(controller, "error", {
-            message:
-              error instanceof Error
-                ? error.message
-                : "Unable to summarize this post.",
-          });
-          controller.close();
+          if (isAbortError(error)) {
+            closeEventStream(controller);
+            return;
+          }
+
+          try {
+            enqueueEvent(controller, "error", {
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Unable to summarize this post.",
+            });
+          } catch {
+            closeEventStream(controller);
+            return;
+          }
+
+          closeEventStream(controller);
         }
       },
     }),
@@ -854,6 +908,24 @@ function createEventStream(
       headers: STREAM_HEADERS,
     },
   );
+}
+
+function closeEventStream(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+) {
+  try {
+    controller.close();
+  } catch {
+    return;
+  }
+}
+
+function isAbortError(error: unknown) {
+  if (!error || typeof error !== "object" || !("name" in error)) {
+    return false;
+  }
+
+  return (error as { name?: unknown }).name === "AbortError";
 }
 
 function enqueueEvent(
@@ -945,9 +1017,30 @@ function randomInteger(minimum: number, maximum: number) {
   return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
 }
 
-function wait(milliseconds: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, milliseconds);
+function wait(milliseconds: number, signal?: AbortSignal) {
+  if (!signal) {
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, milliseconds);
+    });
+  }
+
+  if (signal.aborted) {
+    return Promise.reject(
+      new DOMException("Summary generation stopped.", "AbortError"),
+    );
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    function handleAbort() {
+      clearTimeout(timeout);
+      reject(new DOMException("Summary generation stopped.", "AbortError"));
+    }
+
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, milliseconds);
+    signal.addEventListener("abort", handleAbort, { once: true });
   });
 }
 
