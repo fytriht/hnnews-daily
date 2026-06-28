@@ -10,7 +10,7 @@ export function buildCodexSummarizeUrl(
   originalUrl: string,
   hnCommentsUrl: string,
   settings: CodexSettings,
-  title = "",
+  title: string,
 ) {
   const promptTemplate = settings.promptTemplate.trim()
     ? settings.promptTemplate

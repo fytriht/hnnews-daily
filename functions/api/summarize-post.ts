@@ -24,9 +24,6 @@ interface OpenRouterStreamChunk {
     delta?: {
       content?: unknown;
     };
-    message?: {
-      content?: unknown;
-    };
   }>;
   error?: {
     message?: unknown;
@@ -42,7 +39,6 @@ interface CanonicalPost {
 
 const MODEL = "deepseek/deepseek-v4-flash";
 const SUMMARY_PROMPT_VERSION = "v1";
-const DEFAULT_PROMPT_TEMPLATE = "总结 {originalUrl} {hnCommentsUrl}";
 const HN_DAILY_FEED_URL = "https://www.daemonology.net/hn-daily/index.rss";
 const OPENROUTER_CHAT_COMPLETIONS_URL =
   "https://openrouter.ai/api/v1/chat/completions";
@@ -153,21 +149,28 @@ async function readSummaryPayload(
 
   const payload = parsed as SummaryPayload;
   const postId = readRequiredString(payload.postId, "postId");
-  const promptTemplate = readOptionalString(payload.promptTemplate);
+  const promptTemplate = readRequiredString(
+    payload.promptTemplate,
+    "promptTemplate",
+  );
 
   if (!postId.ok) {
     return postId;
+  }
+
+  if (!promptTemplate.ok) {
+    return promptTemplate;
   }
 
   if (!POST_ID_PATTERN.test(postId.value)) {
     return { ok: false, error: "postId is invalid." };
   }
 
-  if (promptTemplate.length > MAX_PROMPT_TEMPLATE_LENGTH) {
+  if (promptTemplate.value.length > MAX_PROMPT_TEMPLATE_LENGTH) {
     return { ok: false, error: "promptTemplate is too long." };
   }
 
-  if (PROMPT_TEMPLATE_HARD_CODED_URL_PATTERN.test(promptTemplate)) {
+  if (PROMPT_TEMPLATE_HARD_CODED_URL_PATTERN.test(promptTemplate.value)) {
     return {
       ok: false,
       error:
@@ -179,7 +182,7 @@ async function readSummaryPayload(
     ok: true,
     value: {
       postId: postId.value,
-      promptTemplate,
+      promptTemplate: promptTemplate.value,
     },
   };
 }
@@ -193,10 +196,6 @@ function readRequiredString(
   }
 
   return { ok: true, value: value.trim() };
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function renderPromptTemplate(
@@ -478,11 +477,7 @@ function normalizeHackerNewsCommentsUrl(value: string) {
 }
 
 function normalizePromptTemplate(promptTemplate: string) {
-  const template = promptTemplate.trim()
-    ? promptTemplate
-    : DEFAULT_PROMPT_TEMPLATE;
-
-  return template
+  return promptTemplate
     .normalize("NFC")
     .replace(/\r\n?/g, "\n")
     .split("\n")
@@ -795,13 +790,8 @@ function readOpenRouterStreamMessage(
       parsed.choices
         ?.map((choice) => {
           const deltaContent = choice.delta?.content;
-          const messageContent = choice.message?.content;
 
-          return typeof deltaContent === "string"
-            ? deltaContent
-            : typeof messageContent === "string"
-              ? messageContent
-              : "";
+          return typeof deltaContent === "string" ? deltaContent : "";
         })
         .join("") ?? "";
 
