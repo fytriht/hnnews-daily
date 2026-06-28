@@ -1206,7 +1206,7 @@ function PostSummaryPanel({
         <div className="post-summary-text">{state.text}</div>
       ) : state.status === "error" ? null : (
         <div className="post-summary-placeholder">
-          正在读取文章和 HN 评论...
+          Reading the article and HN comments...
         </div>
       )}
 
@@ -1215,7 +1215,7 @@ function PostSummaryPanel({
           <p>{state.error}</p>
           <Button variant="outline" onClick={onRetry}>
             <RotateCw size={14} />
-            重试
+            Retry
           </Button>
         </div>
       ) : null}
