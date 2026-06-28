@@ -1146,11 +1146,11 @@ function IssueDetail({
                 <h3>
                   <a
                     className="post-title-link"
-                    href={post.hnCommentsUrl}
+                    href={post.originalUrl}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`Open Hacker News comments: ${post.title}`}
-                    title="Open Hacker News comments"
+                    aria-label={`Open original article: ${post.title}`}
+                    title="Open original article"
                   >
                     {post.title}
                   </a>
