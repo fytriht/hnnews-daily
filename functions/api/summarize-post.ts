@@ -49,6 +49,13 @@ const MAX_REQUEST_BYTES = 12_000;
 const SUMMARY_CACHE_TTL_SECONDS = 60 * 60 * 24 * 90;
 const RATE_LIMIT_MAX_REQUESTS = 30;
 const RATE_LIMIT_TTL_SECONDS = 60 * 60 * 2;
+const CACHED_STREAM_MIN_CHUNK_SIZE = 14;
+const CACHED_STREAM_MAX_CHUNK_SIZE = 42;
+const CACHED_STREAM_MIN_DELAY_MS = 18;
+const CACHED_STREAM_MAX_DELAY_MS = 48;
+const CACHED_STREAM_SENTENCE_PAUSE_MS = 28;
+const CACHED_STREAM_PARAGRAPH_PAUSE_MS = 72;
+const CACHED_STREAM_INITIAL_DELAY_MS = 90;
 const STREAM_HEADERS = {
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-store",
@@ -73,7 +80,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const cached = await readCachedSummary(env.SHARED_READ_STATE, cacheKey);
 
   if (cached) {
-    return createCachedSummaryStream(cached);
+    return createCachedSummaryStream(cached, request.signal);
   }
 
   if (!env.OPENROUTER_API_KEY) {
@@ -285,16 +292,30 @@ async function checkRateLimit(
   return { ok: true };
 }
 
-function createCachedSummaryStream(cached: CachedSummary) {
-  return createEventStream((controller) => {
+function createCachedSummaryStream(cached: CachedSummary, signal: AbortSignal) {
+  return createEventStream(async (controller) => {
     enqueueEvent(controller, "meta", {
       cached: true,
       generatedAt: cached.generatedAt,
       model: cached.model,
     });
 
-    for (const chunk of chunkText(cached.summary)) {
+    await wait(CACHED_STREAM_INITIAL_DELAY_MS);
+
+    const chunks = chunkText(cached.summary);
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      if (signal.aborted) {
+        controller.close();
+        return;
+      }
+
+      const chunk = chunks[index];
       enqueueEvent(controller, "delta", { text: chunk });
+
+      if (index < chunks.length - 1) {
+        await wait(readCachedStreamDelay(chunk));
+      }
     }
 
     enqueueEvent(controller, "done", {});
@@ -604,12 +625,86 @@ function enqueueEvent(
 function chunkText(text: string) {
   const characters = Array.from(text);
   const chunks: string[] = [];
+  let index = 0;
 
-  for (let index = 0; index < characters.length; index += 80) {
-    chunks.push(characters.slice(index, index + 80).join(""));
+  while (index < characters.length) {
+    const targetEnd = Math.min(
+      index +
+        randomInteger(
+          CACHED_STREAM_MIN_CHUNK_SIZE,
+          CACHED_STREAM_MAX_CHUNK_SIZE,
+        ),
+      characters.length,
+    );
+    const chunkEnd = findNaturalChunkEnd(characters, index, targetEnd);
+
+    chunks.push(characters.slice(index, chunkEnd).join(""));
+    index = chunkEnd;
   }
 
   return chunks;
+}
+
+function findNaturalChunkEnd(
+  characters: string[],
+  startIndex: number,
+  targetEnd: number,
+) {
+  const minimumEnd = Math.min(
+    startIndex + CACHED_STREAM_MIN_CHUNK_SIZE,
+    characters.length,
+  );
+  const maximumEnd = Math.min(
+    startIndex + CACHED_STREAM_MAX_CHUNK_SIZE,
+    characters.length,
+  );
+
+  if (targetEnd >= characters.length) {
+    return characters.length;
+  }
+
+  for (let index = targetEnd; index < maximumEnd; index += 1) {
+    if (isNaturalBreakCharacter(characters[index])) {
+      return index + 1;
+    }
+  }
+
+  for (let index = targetEnd - 1; index >= minimumEnd; index -= 1) {
+    if (isNaturalBreakCharacter(characters[index])) {
+      return index + 1;
+    }
+  }
+
+  return targetEnd;
+}
+
+function isNaturalBreakCharacter(character: string | undefined) {
+  return Boolean(character?.match(/[\s,.;:!?，。；：！？、)）\]】"'”’]/));
+}
+
+function readCachedStreamDelay(chunk: string) {
+  let delay = randomInteger(
+    CACHED_STREAM_MIN_DELAY_MS,
+    CACHED_STREAM_MAX_DELAY_MS,
+  );
+
+  if (chunk.endsWith("\n\n")) {
+    delay += CACHED_STREAM_PARAGRAPH_PAUSE_MS;
+  } else if (/[.!?。！？]\s*$/.test(chunk)) {
+    delay += CACHED_STREAM_SENTENCE_PAUSE_MS;
+  }
+
+  return delay;
+}
+
+function randomInteger(minimum: number, maximum: number) {
+  return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 async function sha256Hex(value: string) {
