@@ -1,5 +1,3 @@
-import type { HnPost } from "./types";
-
 export interface SummaryMeta {
   cached: boolean;
   generatedAt: string;
@@ -20,7 +18,7 @@ interface SummaryStreamEvent {
 const SUMMARY_ENDPOINT = "/api/summarize-post";
 
 export async function streamPostSummary(
-  post: HnPost,
+  postId: string,
   promptTemplate: string,
   handlers: SummaryStreamHandlers,
   signal: AbortSignal,
@@ -32,10 +30,7 @@ export async function streamPostSummary(
       Accept: "text/event-stream",
     },
     body: JSON.stringify({
-      postId: post.id,
-      title: post.title,
-      originalUrl: post.originalUrl,
-      hnCommentsUrl: post.hnCommentsUrl,
+      postId,
       promptTemplate,
     }),
     signal,

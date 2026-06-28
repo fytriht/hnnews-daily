@@ -11,7 +11,7 @@ Development setup, validation commands, and deployment notes are in [CONTRIBUTIN
 - View the latest 10 Hacker News Daily issues
 - Select an issue to see that day's top posts
 - Post titles open Hacker News comments; source domains open original articles
-- Each post includes an `AI 总结` button that streams an in-page summary from OpenRouter
+- Each post includes an `AI Summary` button that streams an in-page summary from OpenRouter
 - Each post includes a `Summarize` button that opens a new Codex thread through the `codex://threads/new` deep link
 - The default Codex prompt is:
 
@@ -35,6 +35,17 @@ The in-page AI summary flow posts to:
 ```text
 /api/summarize-post
 ```
+
+Request body:
+
+```json
+{
+  "postId": "2026-06-27-1",
+  "promptTemplate": "总结 {originalUrl} {hnCommentsUrl}"
+}
+```
+
+The server treats `postId` as the only trusted post identifier. It resolves the canonical title, article URL, and Hacker News comments URL from Hacker News Daily before building the OpenRouter prompt and cache key.
 
 The endpoint streams Server-Sent Events:
 

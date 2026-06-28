@@ -5,17 +5,11 @@ interface Env {
 
 interface SummaryPayload {
   postId?: unknown;
-  title?: unknown;
-  originalUrl?: unknown;
-  hnCommentsUrl?: unknown;
   promptTemplate?: unknown;
 }
 
 interface ValidatedSummaryPayload {
   postId: string;
-  title: string;
-  originalUrl: string;
-  hnCommentsUrl: string;
   promptTemplate: string;
 }
 
@@ -39,13 +33,25 @@ interface OpenRouterStreamChunk {
   };
 }
 
+interface CanonicalPost {
+  postId: string;
+  title: string;
+  originalUrl: string;
+  hnCommentsUrl: string;
+}
+
 const MODEL = "deepseek/deepseek-v4-flash";
+const SUMMARY_PROMPT_VERSION = "v1";
+const DEFAULT_PROMPT_TEMPLATE = "总结 {originalUrl} {hnCommentsUrl}";
+const HN_DAILY_FEED_URL = "https://www.daemonology.net/hn-daily/index.rss";
 const OPENROUTER_CHAT_COMPLETIONS_URL =
   "https://openrouter.ai/api/v1/chat/completions";
-const POST_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d+$/;
-const MAX_TITLE_LENGTH = 300;
+const POST_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-(?:[1-9]|10)$/;
+const PROMPT_TEMPLATE_HARD_CODED_URL_PATTERN = /\bhttps?:\/\//i;
 const MAX_PROMPT_TEMPLATE_LENGTH = 2400;
 const MAX_REQUEST_BYTES = 12_000;
+const MAX_HN_DAILY_FEED_BYTES = 512_000;
+const HN_DAILY_FEED_CACHE_SECONDS = 900;
 const SUMMARY_CACHE_TTL_SECONDS = 60 * 60 * 24 * 90;
 const RATE_LIMIT_MAX_REQUESTS = 30;
 const RATE_LIMIT_TTL_SECONDS = 60 * 60 * 2;
@@ -75,8 +81,27 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const payload = payloadResult.value;
-  const prompt = renderPromptTemplate(payload.promptTemplate, payload);
-  const cacheKey = await createSummaryCacheKey(payload, prompt);
+  const canonicalPostResult = await readCanonicalPost(payload.postId);
+  if (!canonicalPostResult.ok) {
+    return createErrorStream(
+      canonicalPostResult.error,
+      canonicalPostResult.status,
+    );
+  }
+
+  const canonicalPost = canonicalPostResult.value;
+  const normalizedPromptTemplate = normalizePromptTemplate(
+    payload.promptTemplate,
+  );
+  const renderedPrompt = renderPromptTemplate(
+    normalizedPromptTemplate,
+    canonicalPost,
+  );
+  const prompt = buildOpenRouterPrompt(canonicalPost, renderedPrompt);
+  const cacheKey = await createSummaryCacheKey(
+    canonicalPost,
+    normalizedPromptTemplate,
+  );
   const cached = await readCachedSummary(env.SHARED_READ_STATE, cacheKey);
 
   if (cached) {
@@ -97,7 +122,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     cacheKey,
     kv: env.SHARED_READ_STATE,
     origin: new URL(request.url).origin,
-    payload,
     prompt,
     signal: request.signal,
   });
@@ -128,12 +152,6 @@ async function readSummaryPayload(
 
   const payload = parsed as SummaryPayload;
   const postId = readRequiredString(payload.postId, "postId");
-  const title = readRequiredString(payload.title, "title");
-  const originalUrl = readRequiredString(payload.originalUrl, "originalUrl");
-  const hnCommentsUrl = readRequiredString(
-    payload.hnCommentsUrl,
-    "hnCommentsUrl",
-  );
   const promptTemplate = readOptionalString(payload.promptTemplate);
 
   if (!postId.ok) {
@@ -144,41 +162,22 @@ async function readSummaryPayload(
     return { ok: false, error: "postId is invalid." };
   }
 
-  if (!title.ok) {
-    return title;
-  }
-
-  if (title.value.length > MAX_TITLE_LENGTH) {
-    return { ok: false, error: "title is too long." };
-  }
-
-  if (!originalUrl.ok) {
-    return originalUrl;
-  }
-
-  if (!isPublicHttpUrl(originalUrl.value)) {
-    return { ok: false, error: "originalUrl must be an HTTP URL." };
-  }
-
-  if (!hnCommentsUrl.ok) {
-    return hnCommentsUrl;
-  }
-
-  if (!isHackerNewsCommentsUrl(hnCommentsUrl.value)) {
-    return { ok: false, error: "hnCommentsUrl must be a Hacker News URL." };
-  }
-
   if (promptTemplate.length > MAX_PROMPT_TEMPLATE_LENGTH) {
     return { ok: false, error: "promptTemplate is too long." };
+  }
+
+  if (PROMPT_TEMPLATE_HARD_CODED_URL_PATTERN.test(promptTemplate)) {
+    return {
+      ok: false,
+      error:
+        "promptTemplate must use {originalUrl} and {hnCommentsUrl} instead of hard-coded URLs.",
+    };
   }
 
   return {
     ok: true,
     value: {
       postId: postId.value,
-      title: title.value,
-      originalUrl: originalUrl.value,
-      hnCommentsUrl: hnCommentsUrl.value,
       promptTemplate,
     },
   };
@@ -199,38 +198,11 @@ function readOptionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function isPublicHttpUrl(value: string) {
-  try {
-    const url = new URL(value);
-
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
-function isHackerNewsCommentsUrl(value: string) {
-  try {
-    const url = new URL(value);
-
-    return (
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      url.hostname === "news.ycombinator.com"
-    );
-  } catch {
-    return false;
-  }
-}
-
 function renderPromptTemplate(
   promptTemplate: string,
   payload: Record<"title" | "originalUrl" | "hnCommentsUrl", string>,
 ) {
-  const template = promptTemplate.trim()
-    ? promptTemplate
-    : "总结 {originalUrl} {hnCommentsUrl}";
-
-  return template
+  return promptTemplate
     .split("{title}")
     .join(payload.title)
     .split("{originalUrl}")
@@ -239,22 +211,326 @@ function renderPromptTemplate(
     .join(payload.hnCommentsUrl);
 }
 
+function buildOpenRouterPrompt(
+  canonicalPost: CanonicalPost,
+  renderedPrompt: string,
+) {
+  return [
+    `Title: ${canonicalPost.title}`,
+    `Article URL: ${canonicalPost.originalUrl}`,
+    `Hacker News comments URL: ${canonicalPost.hnCommentsUrl}`,
+    "",
+    "Use only the Article URL and Hacker News comments URL above as external web sources.",
+    "Apply the user's prompt below after replacing supported placeholders.",
+    "",
+    "User prompt:",
+    renderedPrompt,
+  ].join("\n");
+}
+
 async function createSummaryCacheKey(
   payload: Record<"postId" | "title" | "originalUrl" | "hnCommentsUrl", string>,
-  prompt: string,
+  normalizedPromptTemplate: string,
 ) {
   const digest = await sha256Hex(
     JSON.stringify({
       model: MODEL,
+      promptVersion: SUMMARY_PROMPT_VERSION,
       postId: payload.postId,
       title: payload.title,
       originalUrl: payload.originalUrl,
       hnCommentsUrl: payload.hnCommentsUrl,
-      prompt,
+      promptTemplate: normalizedPromptTemplate,
     }),
   );
 
   return `summary:v1:${digest}`;
+}
+
+async function readCanonicalPost(
+  postId: string,
+): Promise<
+  | { ok: true; value: CanonicalPost }
+  | { ok: false; error: string; status: number }
+> {
+  const postIdParts = postId.match(/^(\d{4}-\d{2}-\d{2})-(\d+)$/);
+  if (!postIdParts) {
+    return { ok: false, error: "postId is invalid.", status: 400 };
+  }
+
+  const [, issueDate, rankText] = postIdParts;
+  const rank = Number(rankText);
+
+  try {
+    const response = await fetch(HN_DAILY_FEED_URL, {
+      headers: {
+        Accept: "application/rss+xml,text/xml;q=0.9,*/*;q=0.8",
+        "User-Agent":
+          "hnnews-daily/1.0 (+https://github.com/fytriht/hnnews-daily)",
+      },
+      cf: {
+        cacheTtl: HN_DAILY_FEED_CACHE_SECONDS,
+        cacheEverything: true,
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: "Unable to load Hacker News Daily feed.",
+        status: 502,
+      };
+    }
+
+    const feed = await readResponseTextWithLimit(
+      response,
+      MAX_HN_DAILY_FEED_BYTES,
+    );
+    const descriptionHtml = readIssueDescription(feed, issueDate);
+    if (!descriptionHtml) {
+      return {
+        ok: false,
+        error: "Post was not found in Hacker News Daily.",
+        status: 404,
+      };
+    }
+
+    const postHtml = readPostHtmlAtRank(descriptionHtml, rank);
+    const canonicalPost = postHtml
+      ? parseCanonicalPostHtml(postHtml, postId)
+      : null;
+
+    if (!canonicalPost) {
+      return {
+        ok: false,
+        error: "Post was not found in Hacker News Daily.",
+        status: 404,
+      };
+    }
+
+    return { ok: true, value: canonicalPost };
+  } catch {
+    return {
+      ok: false,
+      error: "Unable to load Hacker News Daily feed.",
+      status: 502,
+    };
+  }
+}
+
+async function readResponseTextWithLimit(response: Response, maxBytes: number) {
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error("Response is too large.");
+  }
+
+  if (!response.body) {
+    return "";
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    bytesRead += value.byteLength;
+    if (bytesRead > maxBytes) {
+      await reader.cancel();
+      throw new Error("Response is too large.");
+    }
+
+    text += decoder.decode(value, { stream: true });
+  }
+
+  return text + decoder.decode();
+}
+
+function readIssueDescription(feed: string, issueDate: string) {
+  for (const itemMatch of feed.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const item = itemMatch[1];
+    const title = readXmlTagText(item, "title");
+    const link = readXmlTagText(item, "link");
+
+    if (extractIssueDate(title, link) !== issueDate) {
+      continue;
+    }
+
+    return readXmlTagRaw(item, "description");
+  }
+
+  return null;
+}
+
+function readXmlTagText(xml: string, tagName: string) {
+  return decodeHtml(stripCdata(readXmlTagRaw(xml, tagName))).trim();
+}
+
+function readXmlTagRaw(xml: string, tagName: string) {
+  const tagPattern = new RegExp(
+    `<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`,
+    "i",
+  );
+  const match = xml.match(tagPattern);
+
+  return match ? match[1].trim() : "";
+}
+
+function stripCdata(value: string) {
+  const match = value.match(/^<!\[CDATA\[([\s\S]*)\]\]>$/);
+
+  return match ? match[1] : value;
+}
+
+function extractIssueDate(title: string, link: string) {
+  return (
+    title.match(/\d{4}-\d{2}-\d{2}/)?.[0] ??
+    link.match(/\d{4}-\d{2}-\d{2}/)?.[0] ??
+    ""
+  );
+}
+
+function readPostHtmlAtRank(descriptionHtml: string, rank: number) {
+  const posts = Array.from(
+    descriptionHtml.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi),
+  );
+
+  return posts[rank - 1]?.[1] ?? null;
+}
+
+function parseCanonicalPostHtml(
+  postHtml: string,
+  postId: string,
+): CanonicalPost | null {
+  const storyLink = readClassLink(postHtml, "storylink");
+  const commentsLink = readClassLink(postHtml, "postlink");
+
+  if (!storyLink || !commentsLink) {
+    return null;
+  }
+
+  const originalUrl = normalizePublicHttpUrl(storyLink.href);
+  const hnCommentsUrl = normalizeHackerNewsCommentsUrl(commentsLink.href);
+  const title = decodeHtml(stripTags(storyLink.text))
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!originalUrl || !hnCommentsUrl || !title) {
+    return null;
+  }
+
+  return {
+    postId,
+    title,
+    originalUrl,
+    hnCommentsUrl,
+  };
+}
+
+function readClassLink(html: string, className: string) {
+  const linkPattern = new RegExp(
+    `<span\\b[^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>[\\s\\S]*?<a\\b[^>]*href=(["'])(.*?)\\1[^>]*>([\\s\\S]*?)<\\/a>`,
+    "i",
+  );
+  const match = html.match(linkPattern);
+
+  return match
+    ? {
+        href: decodeHtml(match[2]).trim(),
+        text: match[3],
+      }
+    : null;
+}
+
+function normalizePublicHttpUrl(value: string) {
+  try {
+    const url = new URL(value);
+
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHackerNewsCommentsUrl(value: string) {
+  try {
+    const url = new URL(value);
+
+    if (
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
+      url.hostname !== "news.ycombinator.com" ||
+      url.pathname !== "/item" ||
+      !url.searchParams.get("id")
+    ) {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function normalizePromptTemplate(promptTemplate: string) {
+  const template = promptTemplate.trim()
+    ? promptTemplate
+    : DEFAULT_PROMPT_TEMPLATE;
+
+  return template
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripTags(value: string) {
+  return value.replace(/<[^>]*>/g, "");
+}
+
+function decodeHtml(value: string) {
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+
+  return value
+    .replace(/&#(\d+);/g, (_, codePoint: string) =>
+      decodeCodePoint(Number(codePoint)),
+    )
+    .replace(/&#x([0-9a-f]+);/gi, (_, codePoint: string) =>
+      decodeCodePoint(Number.parseInt(codePoint, 16)),
+    )
+    .replace(
+      /&([a-z]+);/gi,
+      (match, name: string) => namedEntities[name.toLowerCase()] ?? match,
+    );
+}
+
+function decodeCodePoint(codePoint: number) {
+  if (!Number.isFinite(codePoint)) {
+    return "";
+  }
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return "";
+  }
 }
 
 async function readCachedSummary(kv: KVNamespace, cacheKey: string) {
@@ -328,7 +604,6 @@ function createOpenRouterSummaryStream({
   cacheKey,
   kv,
   origin,
-  payload,
   prompt,
   signal,
 }: {
@@ -336,7 +611,6 @@ function createOpenRouterSummaryStream({
   cacheKey: string;
   kv: KVNamespace;
   origin: string;
-  payload: Record<"title" | "originalUrl" | "hnCommentsUrl", string>;
   prompt: string;
   signal: AbortSignal;
 }) {
@@ -358,11 +632,11 @@ function createOpenRouterSummaryStream({
           {
             role: "system",
             content:
-              "You summarize Hacker News posts for a Chinese reader. Fetch and read the provided article URL and Hacker News comments URL before answering. Write concise, useful Chinese.",
+              "You summarize Hacker News posts. Fetch and read the provided article URL and Hacker News comments URL before answering. Follow the user's prompt.",
           },
           {
             role: "user",
-            content: buildSummaryPrompt(payload, prompt),
+            content: prompt,
           },
         ],
         tools: [
@@ -470,24 +744,6 @@ function createOpenRouterSummaryStream({
     enqueueEvent(controller, "done", {});
     controller.close();
   });
-}
-
-function buildSummaryPrompt(
-  payload: Record<"title" | "originalUrl" | "hnCommentsUrl", string>,
-  renderedPrompt: string,
-) {
-  return [
-    `标题：${payload.title}`,
-    `原文链接：${payload.originalUrl}`,
-    `HN 评论链接：${payload.hnCommentsUrl}`,
-    "",
-    "请按用户模板完成总结。若模板没有指定格式，请输出：",
-    "1. 核心内容",
-    "2. 关键观点或争议",
-    "3. 适合谁阅读",
-    "",
-    `用户模板：${renderedPrompt}`,
-  ].join("\n");
 }
 
 async function readOpenRouterError(response: Response) {

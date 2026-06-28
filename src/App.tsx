@@ -883,7 +883,7 @@ function IssueDetail({
 
       try {
         await streamPostSummary(
-          post,
+          post.id,
           codexSettings.promptTemplate,
           {
             onMeta: (meta) => {
