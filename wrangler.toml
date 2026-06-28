@@ -2,11 +2,17 @@ name = "hnnews-daily"
 compatibility_date = "2026-06-27"
 pages_build_output_dir = "dist"
 
+[secrets]
+required = ["OPENROUTER_API_KEY"]
+
 [[kv_namespaces]]
 binding = "SHARED_READ_STATE"
 id = "13ee5201c1e04921874ae6793750400b"
 
 [env.preview]
+
+[env.preview.secrets]
+required = ["OPENROUTER_API_KEY"]
 
 [[env.preview.kv_namespaces]]
 binding = "SHARED_READ_STATE"

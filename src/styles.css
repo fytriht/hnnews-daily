@@ -544,20 +544,20 @@ a {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
+  column-gap: 16px;
+  row-gap: 0;
   min-height: 78px;
   padding: 14px 0;
   border-bottom: 1px solid #edf0f4;
-  transition: opacity 160ms ease;
-}
-
-.post-row.summarized {
-  opacity: 0.52;
+  transition: color 160ms ease;
 }
 
 .post-row.summarized .post-rank,
-.post-row.summarized .post-main h3,
-.post-row.summarized .button {
+.post-row.summarized .post-main {
+  opacity: 0.56;
+}
+
+.post-row.summarized .post-main h3 {
   font-weight: 400;
 }
 
@@ -629,6 +629,188 @@ a {
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.summary-button[aria-expanded="true"] {
+  color: var(--muted);
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.summary-loading-icon {
+  animation: refresh-spin 1s linear infinite;
+}
+
+.post-summary-slot {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    grid-template-rows 180ms ease,
+    margin 180ms ease,
+    opacity 140ms ease;
+}
+
+.post-summary-slot.expanded {
+  grid-template-rows: 1fr;
+  margin: 12px 0 4px;
+  opacity: 1;
+}
+
+.post-summary-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 13px 14px;
+  border: 1px solid #edf0f4;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.post-summary-panel.error {
+  border-color: #f4c6c1;
+  background: var(--surface);
+}
+
+.post-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.post-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.2;
+}
+
+.post-summary-text,
+.post-summary-placeholder {
+  color: #2f3947;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.post-summary-text {
+  white-space: normal;
+}
+
+.post-summary-text > :first-child {
+  margin-top: 0;
+}
+
+.post-summary-text > :last-child {
+  margin-bottom: 0;
+}
+
+.post-summary-text h1,
+.post-summary-text h2,
+.post-summary-text h3,
+.post-summary-text h4 {
+  margin: 16px 0 8px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.post-summary-text p {
+  margin: 0 0 12px;
+}
+
+.post-summary-text ul,
+.post-summary-text ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.post-summary-text li {
+  margin: 4px 0;
+}
+
+.post-summary-text blockquote {
+  margin: 0 0 12px;
+  padding-left: 12px;
+  border-left: 3px solid #edf0f4;
+  color: var(--muted);
+}
+
+.post-summary-text code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f3f5f8;
+  font-size: 0.92em;
+}
+
+.post-summary-text pre {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 8px;
+  background: #f3f5f8;
+}
+
+.post-summary-text pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.post-summary-text table {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.post-summary-text th,
+.post-summary-text td {
+  padding: 6px 8px;
+  border: 1px solid #edf0f4;
+  text-align: left;
+  vertical-align: top;
+}
+
+.post-summary-text th {
+  color: var(--ink);
+  background: #f7f8fa;
+  font-weight: 720;
+}
+
+.post-summary-text a {
+  color: var(--focus);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.post-summary-placeholder {
+  color: var(--muted);
+}
+
+.post-summary-error-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.post-summary-error-row p {
+  margin: 0;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .post-skeleton-line,
@@ -704,7 +886,8 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .refresh-icon.loading {
+  .refresh-icon.loading,
+  .summary-loading-icon {
     animation: none;
   }
 }
@@ -827,5 +1010,15 @@ textarea:focus-visible,
   .post-actions {
     grid-column: 2;
     justify-content: flex-start;
+  }
+
+  .post-summary-slot {
+    grid-column: 1 / -1;
+  }
+
+  .post-summary-header,
+  .post-summary-error-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

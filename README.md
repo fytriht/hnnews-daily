@@ -1,6 +1,6 @@
 # Hacker News Daily Codex Reader
 
-A small daily reading tool for Hacker News Daily. It shows the latest 10 daily issues, lists the top posts for each day, and adds a one-click Codex summary flow for every post.
+A small daily reading tool for Hacker News Daily. It shows the latest 10 daily issues, lists the top posts for each day, adds a one-click Codex summary flow, and can summarize posts in the page with AI.
 
 Live site: [https://hnnews-daily.pages.dev](https://hnnews-daily.pages.dev)
 
@@ -11,6 +11,7 @@ Development setup, validation commands, and deployment notes are in [CONTRIBUTIN
 - View the latest 10 Hacker News Daily issues
 - Select an issue to see that day's top posts
 - Post titles open Hacker News comments; source domains open original articles
+- Each post includes an `AI Summary` button that streams an in-page summary from OpenRouter
 - Each post includes a `Summarize` button that opens a new Codex thread through the `codex://threads/new` deep link
 - The default Codex prompt is:
 
@@ -18,7 +19,7 @@ Development setup, validation commands, and deployment notes are in [CONTRIBUTIN
 总结 {originalUrl} {hnCommentsUrl}
 ```
 
-- The Codex prompt template can be changed in the app settings and supports `{originalUrl}` and `{hnCommentsUrl}` placeholders
+- The prompt template can be changed in the app settings and supports `{title}`, `{originalUrl}`, and `{hnCommentsUrl}` placeholders
 - An optional Codex project path can be configured; when blank, the new thread opens without a project path
 - Selecting an issue marks it as read on the current device
 - Read issues can be manually marked as unread
@@ -26,6 +27,46 @@ Development setup, validation commands, and deployment notes are in [CONTRIBUTIN
 - Shared links use a short `?share=<id>` URL; anyone with the URL can update the shared progress
 - Local read state, selected issue, summarized posts, and Codex settings are stored in browser `localStorage`
 - Feed loading errors show a retry action
+
+## AI Summary API
+
+The in-page AI summary flow posts to:
+
+```text
+/api/summarize-post
+```
+
+Request body:
+
+```json
+{
+  "postId": "2026-06-27-1",
+  "promptTemplate": "总结 {originalUrl} {hnCommentsUrl}"
+}
+```
+
+The server treats `postId` as the only trusted post identifier. Cached summaries are keyed by `postId`, model, prompt version, and normalized prompt template. On cache misses, the server resolves the canonical title, article URL, and Hacker News comments URL from Hacker News Daily before building the OpenRouter prompt.
+
+The endpoint streams Server-Sent Events:
+
+- `meta` with `cached`, `model`, and `generatedAt`
+- `delta` with text chunks
+- `done` when complete
+- `error` with a user-facing message
+
+The production model is:
+
+```text
+deepseek/deepseek-v4-flash
+```
+
+The OpenRouter API key must be configured as a Cloudflare Pages secret named:
+
+```text
+OPENROUTER_API_KEY
+```
+
+Do not commit real API keys. The server caches successful summaries in KV for 90 days and applies a small per-IP hourly rate limit on cache misses.
 
 ## Data Source
 
@@ -53,3 +94,5 @@ All devices that open the same URL read and write the same Cloudflare KV-backed 
 - Posts marked as summarized
 
 The shared URL is a read/write bearer link. Do not share it with someone who should not be able to change the progress.
+
+The same KV namespace also stores cached AI summaries and cache-miss rate-limit counters under separate key prefixes.

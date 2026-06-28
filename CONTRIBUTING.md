@@ -17,12 +17,15 @@ This document describes how to set up, develop, validate, and deploy Hacker News
 ```text
 src/
   App.tsx           Main reader UI and settings dialog
+  aiSummary.ts      Streaming AI summary API client
   hnDaily.ts        RSS fetch and parsing
   codex.ts          Codex deep-link URL generation
   sharedState.ts    Shared read-state API client
   storage.ts        localStorage persistence
 functions/
   api/
+    summarize-post.ts
+                  Stream AI summaries and cache results
     shared-state/
       index.ts      Create shared progress ids
       [id].ts       Read and patch shared progress
@@ -60,6 +63,12 @@ npm run dev:pages
 
 `npm run dev:pages` builds the app first, then runs Cloudflare Pages locally with a local `SHARED_READ_STATE` KV binding.
 
+To test AI summaries locally, provide an OpenRouter key as an environment variable before starting Pages dev:
+
+```bash
+OPENROUTER_API_KEY=<your-key> npm run dev:pages
+```
+
 ## Commands
 
 | Command                       | Description                                               |
@@ -75,7 +84,7 @@ npm run dev:pages
 
 ## Shared Progress Development
 
-Shared progress uses Cloudflare KV. The binding name is:
+Shared progress and AI summary caching use Cloudflare KV. The binding name is:
 
 ```text
 SHARED_READ_STATE
@@ -86,6 +95,14 @@ Shared progress API routes live in:
 ```text
 functions/api/shared-state/
 ```
+
+AI summaries use:
+
+```text
+functions/api/summarize-post.ts
+```
+
+The summary endpoint accepts only `{ postId, promptTemplate }` from the browser and returns `text/event-stream`, including cached responses. Cached summaries are keyed by `postId`, model, prompt version, and normalized prompt template. On cache misses, the server resolves the canonical post title and URLs from Hacker News Daily before calling OpenRouter. It uses OpenRouter model `deepseek/deepseek-v4-flash`, stores successful summaries under a separate KV prefix, and rate-limits cache misses by client IP.
 
 The shared URL is a read/write bearer link. Anyone with the URL can update the shared progress, so avoid logging or sharing these URLs unintentionally during development.
 
@@ -115,12 +132,13 @@ The app is deployed on Cloudflare Pages:
 - Output directory: `dist`
 - Production branch: `main`
 
-Create a KV namespace and bind it to the Pages project before deploying shared progress:
+Create a KV namespace and bind it to the Pages project before deploying shared progress and AI summary caching:
 
 1. Create a Cloudflare KV namespace.
 2. In the Cloudflare Pages project, add a KV binding for both Production and Preview environments.
 3. Set the binding variable name to `SHARED_READ_STATE`.
-4. Redeploy the Pages project.
+4. Add `OPENROUTER_API_KEY` as a Pages secret for Production and Preview.
+5. Redeploy the Pages project.
 
 Pushing to `main` triggers an automatic Cloudflare Pages deployment.
 
