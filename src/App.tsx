@@ -1061,28 +1061,27 @@ function IssueDetail({
             summaryState?.status === "loading" ||
             summaryState?.status === "streaming";
           const hasSummaryResult =
-            summaryState?.status === "done" && summaryState.text.trim();
+            summaryState?.status === "done" &&
+            Boolean(summaryState.text.trim());
+          const canToggleSummary =
+            hasSummaryResult || summaryState?.status === "error";
           const summaryPanelId = `post-summary-${post.id}`;
           const summaryButtonTitle = isSummaryLoading
             ? "Summarizing"
-            : hasSummaryResult
+            : canToggleSummary
               ? summaryState.isExpanded
                 ? "Collapse AI Summary"
                 : "Expand AI Summary"
-              : summaryState?.status === "error"
-                ? "Retry AI Summary"
-                : "AI Summary";
+              : "AI Summary";
           const summaryButtonLabel = isSummaryLoading
             ? `Summarizing with AI: ${post.title}`
-            : hasSummaryResult
+            : canToggleSummary
               ? summaryState.isExpanded
                 ? `Collapse AI Summary: ${post.title}`
                 : `Expand AI Summary: ${post.title}`
-              : summaryState?.status === "error"
-                ? `Retry AI Summary: ${post.title}`
-                : `Generate AI Summary: ${post.title}`;
+              : `Generate AI Summary: ${post.title}`;
           const handleSummaryButtonClick = () => {
-            if (hasSummaryResult) {
+            if (canToggleSummary) {
               togglePostSummary(post.id);
               return;
             }
@@ -1150,7 +1149,7 @@ function IssueDetail({
                 >
                   {isSummaryLoading ? (
                     <LoaderCircle className="summary-loading-icon" size={14} />
-                  ) : hasSummaryResult && summaryState.isExpanded ? (
+                  ) : canToggleSummary && summaryState.isExpanded ? (
                     <ChevronUp size={14} />
                   ) : (
                     <ChevronDown size={14} />
