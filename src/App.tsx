@@ -1158,12 +1158,21 @@ function IssueDetail({
                   AI Summary
                 </Button>
               </div>
-              {summaryState?.isExpanded ? (
-                <PostSummaryPanel
-                  id={summaryPanelId}
-                  state={summaryState}
-                  onRetry={() => void summarizePost(post)}
-                />
+              {summaryState ? (
+                <div
+                  className={
+                    summaryState.isExpanded
+                      ? "post-summary-slot expanded"
+                      : "post-summary-slot"
+                  }
+                  aria-hidden={!summaryState.isExpanded}
+                >
+                  <PostSummaryPanel
+                    id={summaryPanelId}
+                    state={summaryState}
+                    onRetry={() => void summarizePost(post)}
+                  />
+                </div>
               ) : null}
             </li>
           );
