@@ -637,6 +637,13 @@ function createOpenRouterSummaryStream({
           ],
           tools: [
             {
+              type: "openrouter:web_search",
+              parameters: {
+                max_results: 5,
+                blocked_domains: ["localhost", "127.0.0.1", "0.0.0.0", "::1"],
+              },
+            },
+            {
               type: "openrouter:web_fetch",
               parameters: {
                 max_uses: 4,
