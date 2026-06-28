@@ -1210,7 +1210,7 @@ function IssueDetail({
                   ) : (
                     <ChevronDown size={14} />
                   )}
-                  {isSummaryLoading ? "Stop" : "AI Summary"}
+                  {isSummaryLoading ? "Stop" : "Summary"}
                 </Button>
               </div>
               {summaryState?.isExpanded ? (
