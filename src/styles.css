@@ -678,25 +678,6 @@ a {
   background: var(--surface);
 }
 
-.post-summary-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-
-.post-summary-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 780;
-  line-height: 1.2;
-}
-
 .post-summary-text,
 .post-summary-placeholder {
   color: #2f3947;

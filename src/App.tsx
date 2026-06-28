@@ -1200,10 +1200,6 @@ function PostSummaryPanel({
       id={id}
       aria-live="polite"
     >
-      <div className="post-summary-header">
-        <span className="post-summary-title">AI Summary</span>
-      </div>
-
       {state.text ? (
         <div className="post-summary-text">
           <ReactMarkdown
